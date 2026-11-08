@@ -126,11 +126,20 @@ module, so the image is the free edition.
 # amd64, loaded into the local engine (~100 s on the dev host)
 docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .
 
-# arm64 (the production VM), cross-built with qemu; register it once with:
+# arm64 (the production VM), cross-built on amd64 (~45 s cold); register qemu once with:
 docker run --privileged --rm tonistiigi/binfmt --install arm64
-docker buildx build --platform linux/arm64 -t docmost-droneaid:local-arm64 \
-  --output type=docker,dest=docmost-arm64.tar .
+droneaid/docker/build-arm64.sh                       # -> ./docmost-arm64.tar
+droneaid/docker/build-arm64.sh docmost-droneaid:local-arm64 type=cacheonly   # build only
+docker load -i docmost-arm64.tar
 ```
+
+Do not build arm64 with a plain `docker buildx build --platform linux/arm64 .`. Under qemu
+emulation, the client's `vite build` (rolldown) deadlocks: every thread sleeps and the build
+never finishes (seen twice in S1). `build-arm64.sh` takes upstream's `Dockerfile` unchanged
+and derives a variant in which only the `builder` stage runs natively
+(`FROM --platform=$BUILDPLATFORM`). That stage only emits platform-independent `dist/`
+JavaScript. The installer stage still installs native modules (bcrypt, ...) for arm64 under
+qemu, and the runtime is arm64. In CI, a native arm64 runner can use the plain `Dockerfile`.
 
 ## Local stack
 
