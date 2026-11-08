@@ -1,0 +1,53 @@
+# Local stack for our own Docmost image (S7 integration port block).
+# Build the image first:  docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .
+# Then, from this directory:  cp .env.example .env  (fill APP_SECRET)  &&  docker compose up -d
+name: docmost-local
+
+services:
+  docmost:
+    image: ${DOCMOST_IMAGE:-docmost-droneaid:local}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://docmost:${POSTGRES_PASSWORD}@db:5432/docmost
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    volumes:
+      - docmost_storage:/app/data/storage
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: docmost
+      POSTGRES_USER: docmost
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docmost -d docmost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:5540:5432"
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql
+
+  redis:
+    image: redis:8
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:6390:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  docmost_storage:
+  db_data:
+  redis_data:
