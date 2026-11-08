@@ -1,0 +1,118 @@
+/**
+ * Pure decision logic for "Continue with Google".
+ *
+ * Given the verified ID-token claims and what the database already holds, decide
+ * whether to sign an existing user in, link Google to an existing user first,
+ * create a new user, or refuse. No I/O here, so every branch is unit-tested.
+ */
+
+export type GoogleRefusalCode =
+  | 'email_not_verified'
+  | 'missing_email'
+  | 'account_disabled'
+  | 'account_conflict'
+  | 'signup_disabled'
+  | 'domain_not_allowed';
+
+export interface GoogleClaims {
+  sub: string;
+  email?: string;
+  email_verified?: boolean | string;
+  name?: string;
+}
+
+export interface DecisionUser {
+  id: string;
+  email: string;
+  deactivatedAt?: Date | null;
+  deletedAt?: Date | null;
+}
+
+export interface DecisionInput {
+  claims: GoogleClaims;
+  /** User already linked to this Google `sub` (via auth_accounts), if any. */
+  linkedUser?: DecisionUser | null;
+  /** User whose email matches the Google email (case-insensitive), if any. */
+  userByEmail?: DecisionUser | null;
+  /** Google `sub` already linked to `userByEmail`, if that user has a Google link. */
+  userByEmailLinkedSub?: string | null;
+  /** `auth_providers.allow_signup` of our Google provider row. */
+  allowSignup: boolean;
+  /** `workspaces.email_domains`; empty or null means every domain is allowed. */
+  emailDomains?: string[] | null;
+}
+
+export type Decision =
+  | { action: 'login'; userId: string }
+  | { action: 'link_and_login'; userId: string }
+  | { action: 'signup'; email: string; name?: string }
+  | { action: 'refuse'; code: GoogleRefusalCode };
+
+function isDisabled(user: DecisionUser): boolean {
+  return !!(user.deactivatedAt || user.deletedAt);
+}
+
+/** Google sends a boolean; some providers send the string "true". */
+export function isEmailVerified(claims: GoogleClaims): boolean {
+  return claims.email_verified === true || claims.email_verified === 'true';
+}
+
+/**
+ * Same rule as core `validateAllowedEmail` (`core/auth/auth.util.ts`), as a predicate:
+ * an empty or missing domain list allows every domain.
+ */
+export function isEmailDomainAllowed(
+  email: string,
+  emailDomains?: string[] | null,
+): boolean {
+  if (!emailDomains || emailDomains.length === 0) return true;
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain) return false;
+  return emailDomains.map((d) => d.toLowerCase()).includes(domain);
+}
+
+export function decideGoogleSignIn(input: DecisionInput): Decision {
+  const { claims } = input;
+
+  if (!isEmailVerified(claims)) {
+    return { action: 'refuse', code: 'email_not_verified' };
+  }
+
+  const email = claims.email?.trim();
+  if (!email || !email.includes('@')) {
+    return { action: 'refuse', code: 'missing_email' };
+  }
+
+  // 1. Already linked: the Google account identifies the user, whatever its email is now.
+  if (input.linkedUser) {
+    if (isDisabled(input.linkedUser)) {
+      return { action: 'refuse', code: 'account_disabled' };
+    }
+    return { action: 'login', userId: input.linkedUser.id };
+  }
+
+  // 2. Existing user with this email: link it. The domain rule never applies here,
+  //    so existing accounts are never locked out by it.
+  if (input.userByEmail) {
+    if (isDisabled(input.userByEmail)) {
+      return { action: 'refuse', code: 'account_disabled' };
+    }
+    if (
+      input.userByEmailLinkedSub &&
+      input.userByEmailLinkedSub !== claims.sub
+    ) {
+      // The user is already linked to a different Google account.
+      return { action: 'refuse', code: 'account_conflict' };
+    }
+    return { action: 'link_and_login', userId: input.userByEmail.id };
+  }
+
+  // 3. Unknown email: signup, only if allowed by the provider setting and the domain list.
+  if (!input.allowSignup) {
+    return { action: 'refuse', code: 'signup_disabled' };
+  }
+  if (!isEmailDomainAllowed(email, input.emailDomains)) {
+    return { action: 'refuse', code: 'domain_not_allowed' };
+  }
+  return { action: 'signup', email: email.toLowerCase(), name: claims.name };
+}
