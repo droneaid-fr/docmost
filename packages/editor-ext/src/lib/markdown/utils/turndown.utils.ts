@@ -1,6 +1,7 @@
 import * as _TurndownService from '@joplin/turndown';
 import * as TurndownPluginGfm from '@joplin/turndown-plugin-gfm';
 import { getBasename } from './basename';
+import { databaseTurndown } from '../../droneaid/database/markdown';
 
 // CJS/ESM interop: .default exists in Vite, not in NestJS
 const TurndownService = (_TurndownService as any).default || _TurndownService;
@@ -40,6 +41,7 @@ export function htmlToMarkdown(html: string): string {
     video,
     footnoteRef,
     footnotesList,
+    databaseTurndown,
   ]);
   const htmlWithoutColgroups = html.replace(
     /<colgroup\b[^>]*>[\s\S]*?<\/colgroup>/gi,

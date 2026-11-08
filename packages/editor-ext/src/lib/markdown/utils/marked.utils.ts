@@ -8,6 +8,7 @@ import {
   renderFootnotesList,
   resetFootnotes,
 } from "./footnotes.marked";
+import { databaseMarkedExtension } from "../../droneaid/database/markdown";
 
 marked.use({
   renderer: {
@@ -46,6 +47,7 @@ marked.use({
     mathInlineExtension,
     footnoteDefExtension,
     footnoteRefExtension,
+    databaseMarkedExtension,
   ],
 });
 
