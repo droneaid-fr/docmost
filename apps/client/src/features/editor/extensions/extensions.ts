@@ -109,6 +109,7 @@ import TabsView from "@/features/editor/components/tabs/tabs-view.tsx";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import { BaseEmbedView } from "@/features/editor/components/base-embed/base-embed-view.tsx";
+import { databaseExtensions } from "@/droneaid/database";
 import { common, createLowlight } from "lowlight";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import powershell from "highlight.js/lib/languages/powershell";
@@ -455,6 +456,7 @@ export const mainExtensions = [
   AutoJoiner.configure({
     elementsToJoin: [],
   }),
+  ...databaseExtensions,
 ] as any;
 
 type CollabExtensions = (provider: HocuspocusProvider, user: IUser) => any[];

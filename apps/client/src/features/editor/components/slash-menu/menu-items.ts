@@ -62,6 +62,7 @@ import {
   YoutubeIcon,
 } from "@/components/icons";
 import { insertBaseEmbedBlock } from "@/features/editor/components/base-embed/insert-base-embed";
+import { databaseSlashItem } from "@/droneaid/database";
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
@@ -374,6 +375,7 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
           .run(),
     },
+    databaseSlashItem,
     {
       title: "Base (Inline)",
       description: "Insert an inline base on this page",
