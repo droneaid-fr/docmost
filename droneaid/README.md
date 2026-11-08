@@ -154,3 +154,31 @@ curl -s localhost:3000/api/health
 ```
 
 Then open `http://localhost:3000` and complete setup.
+
+## Google sign-in (`apps/server/src/droneaid/google-auth`)
+
+Off unless both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in `.env`. The login
+page asks `GET /api/droneaid/auth/google/config` and shows "Continue with Google" only when
+it returns `{ enabled: true }`.
+
+- Redirect URI to register on the Google OAuth client: `${APP_URL}/api/droneaid/auth/google/callback`
+  (production: `https://base.droneaid.fr/api/droneaid/auth/google/callback`).
+- Flow: `GET /api/droneaid/auth/google` → Google (state, nonce, PKCE S256; the transaction is
+  an HMAC-signed httpOnly cookie) → callback → `authToken` cookie and `/home`, or
+  `/login?google_error=<code>`.
+- A Google account is linked in core `auth_accounts` against one `auth_providers` row of type
+  `google`, created on first use with `is_enabled=false` (so licence-gated SSO code never sees
+  it) and `allow_signup=false`. Existing users (matched by email, case-insensitive) always
+  sign in and get linked. Unknown emails sign up only if `allow_signup` is true **and** the
+  domain passes `workspaces.email_domains`. Until the S2b admin screen exists, toggle signup
+  with `update auth_providers set allow_signup = true where type = 'google';`.
+- `GOOGLE_OIDC_ISSUER` overrides the issuer (default `https://accounts.google.com`); tests only.
+
+E2E against a mock provider (needs the dev server running with the mock issuer):
+
+```bash
+docker run -d --name docmost-s2-oidc -p 127.0.0.1:8292:8080 ghcr.io/navikt/mock-oauth2-server:2.1.10
+# .env: GOOGLE_CLIENT_ID=docmost-test GOOGLE_CLIENT_SECRET=docmost-test-secret
+#       GOOGLE_OIDC_ISSUER=http://localhost:8292/default
+cd apps/server && pnpm test:e2e -- droneaid/google-auth
+```
