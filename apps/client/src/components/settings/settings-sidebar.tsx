@@ -16,6 +16,7 @@ import {
   IconPlug,
   IconHistory,
   IconShieldCheck,
+  IconRobot,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -138,6 +139,13 @@ const groupedData: DataGroup[] = [
         label: "Integrations",
         icon: IconPlug,
         path: "/settings/integrations",
+        role: "admin",
+      },
+      // DroneAid: MCP agents
+      {
+        label: "Agents",
+        icon: IconRobot,
+        path: "/settings/droneaid/agents",
         role: "admin",
       },
     ],
