@@ -1,0 +1,18 @@
+{
+  "googleAuth": {
+    "continue": "Continuer avec Google",
+    "or": "ou",
+    "error": {
+      "email_not_verified": "L'adresse e-mail de votre compte Google n'est pas vérifiée.",
+      "missing_email": "Google n'a pas communiqué d'adresse e-mail pour ce compte.",
+      "account_disabled": "Ce compte est désactivé. Contactez un administrateur de l'espace de travail.",
+      "account_conflict": "Ce compte est déjà associé à un autre compte Google.",
+      "signup_disabled": "Aucun compte n'existe pour cette adresse, et l'inscription avec Google n'est pas activée. Demandez une invitation à un administrateur.",
+      "domain_not_allowed": "Aucun compte n'existe pour cette adresse, et son domaine n'est pas autorisé à s'inscrire. Demandez une invitation à un administrateur.",
+      "not_configured": "La connexion avec Google n'est pas configurée.",
+      "state_mismatch": "La session de connexion Google a expiré. Veuillez réessayer.",
+      "cancelled": "La connexion avec Google a été annulée.",
+      "failed": "La connexion avec Google a échoué. Veuillez réessayer."
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "googleAuth": {
+    "continue": "Continue with Google",
+    "or": "or",
+    "error": {
+      "email_not_verified": "Your Google account's email address is not verified.",
+      "missing_email": "Google did not share an email address for this account.",
+      "account_disabled": "This account is disabled. Contact a workspace admin.",
+      "account_conflict": "This account is already linked to a different Google account.",
+      "signup_disabled": "No account exists for this email, and sign-up with Google is not enabled. Ask a workspace admin for an invitation.",
+      "domain_not_allowed": "No account exists for this email, and its domain is not allowed to sign up. Ask a workspace admin for an invitation.",
+      "not_configured": "Google sign-in is not configured.",
+      "state_mismatch": "The Google sign-in session expired. Please try again.",
+      "cancelled": "Google sign-in was cancelled.",
+      "failed": "Google sign-in failed. Please try again."
+    }
+  }
+}
