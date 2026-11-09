@@ -20,8 +20,8 @@ import {
 } from './dto/translate.dto';
 import { TranslationAccess } from './translation.access';
 import { TranslationService } from './translation.service';
-import { TranslationRepo } from './translation.repo';
 import { TranslationProvider } from './translation.provider';
+import { ServedTranslations } from './served-translations';
 
 /**
  *   POST /api/droneaid/translate/page          state for the share menu (page viewers)
@@ -36,7 +36,7 @@ export class TranslationController {
   constructor(
     private readonly access: TranslationAccess,
     private readonly service: TranslationService,
-    private readonly repo: TranslationRepo,
+    private readonly served: ServedTranslations,
     private readonly provider: TranslationProvider,
     private readonly shareService: ShareService,
   ) {}
@@ -85,7 +85,8 @@ export class TranslationController {
    * Same gate as core's POST /api/shares/page-info: the page must be
    * reachable through a share, sharing allowed, no restricted ancestor
    * (ShareService.getSharedPage). Attachments in the translation get the
-   * same public tokens as the original (updatePublicAttachments).
+   * same public tokens as the original (updatePublicAttachments). Only
+   * translations of the page's current text are offered (ServedTranslations).
    */
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -107,11 +108,11 @@ export class TranslationController {
     if (!this.provider.enabled) {
       return { sourceLang: null, languages: [], translation: null };
     }
-    const served = await this.repo.servedLanguages(page.id);
+    const served = await this.served.languages(page.id);
     const languages = served.map((row) => row.lang);
     let translation = null;
     if (dto.lang && languages.includes(dto.lang)) {
-      const row = await this.repo.getServed(page.id, dto.lang);
+      const row = await this.served.translation(page.id, dto.lang);
       if (row) {
         translation = {
           lang: dto.lang,

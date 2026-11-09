@@ -19,8 +19,9 @@ import {
 /**
  * The translation job: a BullMQ job scheduler fires a tick every 30 s (only
  * while TRANSLATE_ENABLED); each tick drops translations of pages that are no
- * longer shared, then translates due rows one language at a time until its
- * time budget is spent. Saving languages or pressing Update queues an extra
+ * longer shared, queues again the translations of pages edited and then left
+ * alone for TRANSLATE_REFRESH_QUIET_MINUTES, then translates due rows one
+ * language at a time until its time budget is spent. Saving languages or pressing Update queues an extra
  * tick so the user does not wait for the next slot.
  */
 @Processor(TRANSLATE_QUEUE)
@@ -37,6 +38,7 @@ export class TranslationProcessor extends WorkerHost {
   async process(job: Job): Promise<void> {
     if (job.name !== TRANSLATE_TICK_JOB || !this.provider.enabled) return;
     await this.translations.sweep();
+    await this.translations.requeueEdited();
     const deadline = Date.now() + TICK_BUDGET_MS;
     while (Date.now() < deadline && (await this.translations.processNext())) {
       // one row per iteration; Gemini quotas are per minute

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TranslationRepo } from './translation.repo';
+import { ServedTranslations } from './served-translations';
 import { TranslationProvider } from './translation.provider';
 import { isTranslationLanguage } from './languages';
 
@@ -19,7 +19,7 @@ export interface ShareTitleTranslations {
 @Injectable()
 export class ShareTitles implements ShareTitleTranslations {
   constructor(
-    private readonly repo: TranslationRepo,
+    private readonly served: ServedTranslations,
     private readonly provider: TranslationProvider,
   ) {}
 
@@ -27,7 +27,7 @@ export class ShareTitles implements ShareTitleTranslations {
     if (!lang || !isTranslationLanguage(lang) || !this.provider.enabled) {
       return null;
     }
-    const row = await this.repo.getServed(pageId, lang);
+    const row = await this.served.translation(pageId, lang);
     return row?.title ? { lang, title: row.title } : null;
   }
 }

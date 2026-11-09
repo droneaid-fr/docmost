@@ -18,12 +18,12 @@ function setup(
     })),
   };
   const repo = {
-    servedLanguages: jest
+    languages: jest
       .fn()
       .mockResolvedValue(
         (opts.served ?? ['en']).map((lang) => ({ lang, sourceLang: 'fr' })),
       ),
-    getServed: jest.fn(async (_p: string, lang: string) => ({
+    translation: jest.fn(async (_p: string, lang: string) => ({
       title: `T-${lang}`,
       content: { type: 'doc' },
     })),
@@ -58,7 +58,7 @@ describe('public translation endpoint (?lang=)', () => {
       const out = await controller.shared({ pageId: 'p', lang }, WS);
       expect(out.translation).toBeNull();
     }
-    expect(repo.getServed).not.toHaveBeenCalled();
+    expect(repo.translation).not.toHaveBeenCalled();
   });
 
   it('serves nothing while the feature is off', async () => {

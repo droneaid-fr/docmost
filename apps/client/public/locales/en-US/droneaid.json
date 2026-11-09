@@ -196,13 +196,14 @@
     "source": "Written in",
     "update": "Update translations",
     "saveFailed": "Could not update translations",
-    "hint": "Readers of the public page can switch to these languages. Translations are machine-made and do not follow later edits until you update them.",
+    "hint": "Readers of the public page can switch to these languages. Translations are machine-made. After an edit, readers see the original until the page is translated again: automatically once it has had no edits for {{minutes}} min, or now with Update.",
     "status": {
       "pending": "Queued",
       "running": "Translating…",
       "ready": "Ready",
       "failed": "Failed",
-      "outOfDate": "Out of date"
+      "outOfDate": "Out of date: original shown",
+      "outOfDateHint": "Readers see the original until this is translated again, automatically {{minutes}} min after the last edit."
     },
     "reader": {
       "label": "Language",

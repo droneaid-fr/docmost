@@ -15,9 +15,12 @@ export type TranslationView = {
   status: string;
   error: string | null;
   translatedAt: Date | null;
-  /** A snapshot is served to readers. */
+  /** A snapshot exists (served only while not out of date). */
   available: boolean;
-  /** The page changed after the served snapshot was made. */
+  /**
+   * The page changed after the snapshot was made: readers see the original
+   * until it is translated again.
+   */
   outOfDate: boolean;
 };
 
@@ -28,6 +31,8 @@ export type PageTranslationsView = {
   languages: readonly string[];
   sourceLang: string | null;
   translations: TranslationView[];
+  /** Edited pages are translated again after this many minutes without edits. */
+  refreshQuietMinutes: number;
 };
 
 /** Out of date: a snapshot exists and was made from other content. */
@@ -81,6 +86,7 @@ export class TranslationService {
       languages: TRANSLATION_LANGUAGES,
       sourceLang: rows[0]?.sourceLang ?? null,
       translations,
+      refreshQuietMinutes: this.provider.config().refreshQuietMinutes,
     };
   }
 

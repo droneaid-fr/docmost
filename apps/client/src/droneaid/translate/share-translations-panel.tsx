@@ -32,7 +32,13 @@ const STATUS_COLOR: Record<string, string> = {
   failed: "red",
 };
 
-function StatusBadge({ row }: { row: PageTranslation }) {
+function StatusBadge({
+  row,
+  minutes,
+}: {
+  row: PageTranslation;
+  minutes: number;
+}) {
   const { t } = useTranslation("droneaid");
   const outOfDate = row.status === "ready" && row.outOfDate;
   const badge = (
@@ -48,8 +54,11 @@ function StatusBadge({ row }: { row: PageTranslation }) {
         : t(`translate.status.${row.status}`)}
     </Badge>
   );
-  return row.error ? (
-    <Tooltip label={row.error} multiline w={260} withinPortal={false}>
+  const tip =
+    row.error ??
+    (outOfDate ? t("translate.status.outOfDateHint", { minutes }) : null);
+  return tip ? (
+    <Tooltip label={tip} multiline w={260} withinPortal={false}>
       {badge}
     </Tooltip>
   ) : (
@@ -122,6 +131,7 @@ export function ShareTranslationsPanel({ pageId }: { pageId?: string }) {
   const selected = new Set(rows.map((row) => row.lang));
   const busy = rows.some((r) => ["pending", "running"].includes(r.status));
   const disabled = !data.canManage || save.isPending;
+  const minutes = data.refreshQuietMinutes ?? 10;
 
   const submit = (nextSource: string, languages: string[]) =>
     save.mutate({
@@ -183,12 +193,12 @@ export function ShareTranslationsPanel({ pageId }: { pageId?: string }) {
                 }}
                 data-testid={`share-translation-${lang}`}
               />
-              {row && <StatusBadge row={row} />}
+              {row && <StatusBadge row={row} minutes={minutes} />}
             </Group>
           );
         })}
       <Text size="xs" c="dimmed">
-        {t("translate.hint")}
+        {t("translate.hint", { minutes })}
       </Text>
     </Stack>
   );

@@ -80,6 +80,11 @@ export class TranslationWorker {
     return removed;
   }
 
+  /** Queues translations of pages edited and then left alone long enough. */
+  async requeueEdited(): Promise<number> {
+    return this.repo.requeueStale(this.provider.config().refreshQuietMinutes);
+  }
+
   /** Handles one due translation. False when nothing is due. */
   async processNext(): Promise<boolean> {
     const row = await this.repo.claimNext();
@@ -131,6 +136,12 @@ export class TranslationWorker {
 
     const content = getProsemirrorContent(page.content);
     const hash = sourceHash(page.title, content);
+    const sourceUpdatedAt = new Date(page.updatedAt);
+    if (row.sourceHash === hash) {
+      // Saved, but the text is what the snapshot was made from.
+      await this.repo.confirm(row.id, sourceUpdatedAt);
+      return;
+    }
     const result = await translatePage({
       title: page.title,
       content,
@@ -142,6 +153,7 @@ export class TranslationWorker {
       title: result.title,
       content: result.content,
       sourceHash: hash,
+      sourceUpdatedAt,
     });
   }
 }

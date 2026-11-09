@@ -6,7 +6,13 @@
  *   GEMINI_MODEL              Model id. Default: gemini-3.5-flash-lite.
  *   TRANSLATE_GEMINI_BASE_URL Optional override of the Gemini REST base, for
  *                             tests against a fake server only.
+ *   TRANSLATE_REFRESH_QUIET_MINUTES
+ *                             An edited page is translated again once it has
+ *                             had no edits for this long. Default 10; may be
+ *                             fractional (tests).
  */
+
+export const DEFAULT_REFRESH_QUIET_MINUTES = 10;
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 export const GEMINI_API_BASE =
@@ -17,6 +23,7 @@ export interface TranslateConfig {
   apiKey: string | null;
   model: string;
   baseUrl: string;
+  refreshQuietMinutes: number;
 }
 
 export type EnvGetter = (key: string) => string | undefined;
@@ -32,5 +39,13 @@ export function readTranslateConfig(get: EnvGetter): TranslateConfig {
     baseUrl:
       get('TRANSLATE_GEMINI_BASE_URL')?.trim().replace(/\/+$/, '') ||
       GEMINI_API_BASE,
+    refreshQuietMinutes: quietMinutes(get('TRANSLATE_REFRESH_QUIET_MINUTES')),
   };
+}
+
+function quietMinutes(raw: string | undefined): number {
+  const value = Number.parseFloat(raw ?? '');
+  return Number.isFinite(value) && value >= 0
+    ? value
+    : DEFAULT_REFRESH_QUIET_MINUTES;
 }

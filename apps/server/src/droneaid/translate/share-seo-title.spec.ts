@@ -37,7 +37,7 @@ describe('share page meta tags with ?lang=', () => {
 
   const titles = () => {
     const repo = {
-      getServed: jest.fn(async (_p: string, lang: string) =>
+      translation: jest.fn(async (_p: string, lang: string) =>
         lang === 'en' ? { title: 'Hello', content: {} } : null,
       ),
     };

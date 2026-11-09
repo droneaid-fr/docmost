@@ -7,6 +7,7 @@
  *   TRANSLATE_ENABLED=true
  *   GEMINI_API_KEY=fake-key
  *   TRANSLATE_GEMINI_BASE_URL=http://127.0.0.1:8295/v1beta/models
+ *   TRANSLATE_REFRESH_QUIET_MINUTES=0.1
  *
  * then:
  *
@@ -16,8 +17,9 @@
  *
  * Skipped when DRONEAID_E2E_URL is not set. Flow: publish -> choose
  * languages -> the job translates -> `?lang=` serves the translation ->
- * an edit flags it out of date -> Update re-translates -> unpublishing
- * deletes the translations.
+ * an edit takes it offline at once and it comes back translated anew after
+ * the quiet period -> Update re-translates -> unpublishing deletes the
+ * translations.
  */
 import { createServer, Server } from 'node:http';
 
@@ -224,6 +226,38 @@ describeIf('DroneAid translation (integration, fake Gemini)', () => {
       languages: ['fr'],
     });
     expect(anonymous.status).toBe(401);
+  });
+
+  const sharedFr = () =>
+    api(null, 'droneaid/translate/shared', { pageId, lang: 'fr' });
+
+  it('an edit takes the translation offline at once; it returns translated anew after the quiet period', async () => {
+    const update = await api(admin, 'pages/update', {
+      pageId,
+      format: 'markdown',
+      operation: 'append',
+      content: 'A quiet alpha sentence.',
+    });
+    expect(update.status).toBe(200);
+    // As soon as the edit is saved, readers get the original.
+    const offline = await until('out of date', state, (r: any) =>
+      r.data?.translations?.every((t: any) => t.outOfDate),
+    );
+    expect(offline.data.refreshQuietMinutes).toBeGreaterThan(0);
+    const shown = await sharedFr();
+    expect(shown.data.translation).toBeNull();
+    expect(shown.data.languages).toEqual([]);
+    // No Update pressed: the job translates it again on its own.
+    const back = await until(
+      'served again',
+      sharedFr,
+      (r: any) => r.data?.translation !== null,
+      120_000,
+    );
+    expect(text(back.data.translation.content)).toContain(
+      'A quiet alpha-fr sentence.',
+    );
+    expect(back.data.languages).toEqual(['de', 'fr']);
   });
 
   it('an edit flags "out of date"; Update re-translates', async () => {

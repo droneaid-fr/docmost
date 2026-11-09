@@ -196,13 +196,14 @@
     "source": "Rédigé en",
     "update": "Mettre à jour les traductions",
     "saveFailed": "Impossible de mettre à jour les traductions",
-    "hint": "Les lecteurs de la page publique peuvent passer à ces langues. Les traductions sont automatiques et ne suivent les modifications qu'après une mise à jour.",
+    "hint": "Les lecteurs de la page publique peuvent passer à ces langues. Les traductions sont automatiques. Après une modification, les lecteurs voient l'original jusqu'à la nouvelle traduction : automatiquement après {{minutes}} min sans modification, ou tout de suite avec Mettre à jour.",
     "status": {
       "pending": "En attente",
       "running": "Traduction…",
       "ready": "Prête",
       "failed": "Échec",
-      "outOfDate": "Pas à jour"
+      "outOfDate": "Pas à jour : original affiché",
+      "outOfDateHint": "Les lecteurs voient l'original jusqu'à la nouvelle traduction, faite automatiquement {{minutes}} min après la dernière modification."
     },
     "reader": {
       "label": "Langue",

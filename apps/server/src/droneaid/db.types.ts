@@ -49,6 +49,8 @@ export interface DroneaidPageTranslations {
   title: string | null;
   content: unknown | null;
   sourceHash: string | null;
+  /** `pages.updated_at` of the version `source_hash` was made from. */
+  sourceUpdatedAt: Timestamp | null;
   error: string | null;
   attempts: Generated<number>;
   availableAt: Generated<Timestamp>;

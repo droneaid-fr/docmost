@@ -9,6 +9,7 @@ export interface PageTranslation {
   error: string | null;
   translatedAt: string | null;
   available: boolean;
+  /** Edited since translated: readers see the original until it is redone. */
   outOfDate: boolean;
 }
 
@@ -19,6 +20,8 @@ export interface PageTranslations {
   languages: string[];
   sourceLang: string | null;
   translations: PageTranslation[];
+  /** Edited pages are translated again after this many minutes without edits. */
+  refreshQuietMinutes?: number;
 }
 
 export interface SharedTranslation {

@@ -14,6 +14,7 @@ const PAGE = {
   spaceId: 'space',
   title: 'alpha',
   deletedAt: null,
+  updatedAt: new Date('2026-11-09T10:00:00.123Z'),
   content: htmlToJson('<p>alpha beta</p>'),
 };
 
@@ -39,6 +40,8 @@ function setup(opts: {
           : opts.row,
       ),
     complete: jest.fn(),
+    confirm: jest.fn(),
+    requeueStale: jest.fn().mockResolvedValue(3),
     fail: jest.fn(),
     postpone: jest.fn(),
     deleteForPage: jest.fn(),
@@ -54,6 +57,7 @@ function setup(opts: {
     isPublished: jest.fn().mockResolvedValue(opts.published ?? true),
   };
   const provider = {
+    config: () => ({ refreshQuietMinutes: 10 }),
     generator: () =>
       opts.generate === undefined ? fakeGenerate : opts.generate,
   };
@@ -81,6 +85,42 @@ describe('TranslationWorker', () => {
     expect(result.title).toBe('ALFA');
     expect(result.content.content[0].content[0].text).toBe('ALFA BETA');
     expect(result.sourceHash).toBe(sourceHash(PAGE.title, PAGE.content));
+    expect(result.sourceUpdatedAt).toEqual(PAGE.updatedAt);
+  });
+
+  it('re-translates an edited page with its new text', async () => {
+    const { worker, repo } = setup({
+      row: { id: 'r1', pageId: PAGE.id, lang: 'fr', sourceLang: 'en', attempts: 0, sourceHash: 'old' },
+    });
+    await worker.processNext();
+    expect(repo.complete.mock.calls[0][1].content.content[0].content[0].text).toBe(
+      'ALFA BETA',
+    );
+  });
+
+  it('skips the model when a save left the text as translated', async () => {
+    const generate = jest.fn();
+    const { worker, repo } = setup({
+      generate,
+      row: {
+        id: 'r1',
+        pageId: PAGE.id,
+        lang: 'fr',
+        sourceLang: 'en',
+        attempts: 0,
+        sourceHash: sourceHash(PAGE.title, PAGE.content),
+      },
+    });
+    await worker.processNext();
+    expect(generate).not.toHaveBeenCalled();
+    expect(repo.complete).not.toHaveBeenCalled();
+    expect(repo.confirm).toHaveBeenCalledWith('r1', PAGE.updatedAt);
+  });
+
+  it('queues edited pages after the configured quiet period', async () => {
+    const { worker, repo } = setup({});
+    expect(await worker.requeueEdited()).toBe(3);
+    expect(repo.requeueStale).toHaveBeenCalledWith(10);
   });
 
   it('deletes the translations of a page that is no longer shared', async () => {

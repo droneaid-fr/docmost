@@ -12,6 +12,7 @@ import { TranslationRepo } from './translation.repo';
 import { TranslationService } from './translation.service';
 import { TranslationWorker } from './translation.worker';
 import { DRONEAID_SHARE_TITLES, ShareTitles } from './share-title';
+import { ServedTranslations } from './served-translations';
 import { TRANSLATE_QUEUE } from './translation.queue';
 
 /**
@@ -41,6 +42,7 @@ import { TRANSLATE_QUEUE } from './translation.queue';
     TranslationProcessor,
     TranslationScheduler,
     TranslationService,
+    ServedTranslations,
     ShareTitles,
     { provide: DRONEAID_SHARE_TITLES, useExisting: ShareTitles },
   ],
