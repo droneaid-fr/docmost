@@ -1,8 +1,8 @@
 import { Button, Indicator, Popover } from "@mantine/core";
 import { IconLanguage } from "@tabler/icons-react";
-import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useShareForPageQuery } from "@/features/share/queries/share-query.ts";
 import {
   ShareTranslationsPanel,
   usePageTranslationsQuery,
@@ -17,15 +17,22 @@ import {
 export function PageTranslationsButton({ pageId }: { pageId?: string }) {
   const { t } = useTranslation("droneaid");
   const { data, refetch } = usePageTranslationsQuery(pageId);
-  // Sharing or unsharing in core's Share popover shows or hides this button at once.
-  const { data: share } = useShareForPageQuery(pageId);
-  const shareId = share?.id;
-  const lastShareId = useRef(shareId);
+  // Sharing or unsharing in core's Share popover shows or hides this button at
+  // once: core updates or removes its ["share-for-page", pageId] query then.
+  const queryClient = useQueryClient();
   useEffect(() => {
-    if (lastShareId.current === shareId) return;
-    lastShareId.current = shareId;
-    if (pageId) void refetch();
-  }, [pageId, shareId]);
+    if (!pageId) return;
+    return queryClient.getQueryCache().subscribe((event) => {
+      const [key, id] = event.query.queryKey as unknown[];
+      if (key !== "share-for-page" || id !== pageId) return;
+      if (
+        event.type === "removed" ||
+        (event.type === "updated" && event.action.type === "success")
+      ) {
+        void refetch();
+      }
+    });
+  }, [pageId, queryClient, refetch]);
 
   if (!data?.enabled || !data.published) return null;
 
