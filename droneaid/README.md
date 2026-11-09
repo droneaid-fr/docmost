@@ -173,6 +173,15 @@ it returns `{ enabled: true }`.
   domain passes `workspaces.email_domains`. Until the S2b admin screen exists, toggle signup
   with `update auth_providers set allow_signup = true where type = 'google';`.
 - `GOOGLE_OIDC_ISSUER` overrides the issuer (default `https://accounts.google.com`); tests only.
+- MCP agent accounts (users with a `droneaid_agents` row) are refused like disabled accounts:
+  Google never signs in as an agent and is never linked to one, whatever its email.
+- **No MFA in this build.** MFA (enrolment, TOTP check, the `mfa_token` step) is EE: core's
+  password login runs it only through `require('./ee/mfa/...')`, which a source build lacks,
+  so password login never asks for a second factor either, even with
+  `workspaces.enforce_mfa` set (core sets that flag without a licence check, but only its
+  invitation and password-reset paths read it, to send the user to the login page). Google
+  sign-in therefore applies no MFA check; there is nothing to enforce. Revisit if we ever
+  build MFA ourselves.
 
 E2E against a mock provider (needs the dev server running with the mock issuer):
 
@@ -198,6 +207,27 @@ constant in `apps/server/src/droneaid/search/search-config.ts`, used by
 cd apps/server && pnpm test:e2e -- droneaid/french-search   # needs the step's Postgres with migrations
 ```
 
+## MCP (`apps/server/src/droneaid/mcp`)
+
+- Route `POST /api/droneaid/mcp`, 24 MiB body limit on that route only. A route-level
+  `onRequest` hook refuses requests without a well-formed, valid `Authorization: Bearer`
+  token (agent token row, or JWT signature and expiry) before the body is read. `main.ts`
+  sets Nest's `rawBody` for every route, so the JSON parser still makes a Buffer copy of the
+  body; a route `preHandler` drops it right after parsing (avoiding it entirely would mean
+  editing `main.ts`).
+- Throttle: 120 requests per minute per token (`McpThrottlerGuard`, core's ThrottlerGuard and
+  Redis storage with its own throttler).
+- `update_document` never rebuilds what Markdown cannot carry. Databases, synced blocks
+  (`transclusionSource`), columns and tabs are kept whole: `read_document` shows a database as
+  one marker line and the others between `<!-- <kind> id=... start ... -->` and
+  `<!-- <kind> id=... end -->` lines; the live block goes back where its marker stands (text
+  edited between the lines is ignored, with a warning), else at the end. Columns and tabs are
+  numbered by rank (they have no id). Files, embeds, diagrams and page breaks are kept by link
+  or anchor. A block whose Markdown is unchanged is reused from the live doc, so comment marks,
+  alignment, colours, highlights and status badges survive; same text with new formatting gets
+  the live attributes and comment marks back; comments and formatting lost to real rewrites
+  are listed in `warnings`.
+
 ## Hermes agent cutover files (`droneaid/hermes/`)
 
 Checked in S3c against a local Docmost with a test copy of the DA France profile.
@@ -221,6 +251,7 @@ Port of our AFFiNE fork's `plugins/translate`. Off unless `TRANSLATE_ENABLED=tru
 | `GEMINI_API_KEY` | Gemini key. Without it every job fails with "not configured". Core also reads this name for its AI features; both may share the key. |
 | `GEMINI_MODEL` | Default `gemini-3.5-flash-lite`. |
 | `TRANSLATE_GEMINI_BASE_URL` | Tests only: point the client at a fake Gemini. |
+| `TRANSLATE_REFRESH_QUIET_MINUTES` | An edited page is translated again once it has had no edits for this long. Default 10; fractional values allowed (tests use 0.1). |
 
 There is no admin settings toggle: the switch and the key live in the server environment,
 like the Google sign-in keys.
@@ -232,8 +263,12 @@ like the Google sign-in keys.
   popover. Only users who could share the page (edit right, sharing allowed, no restricted
   ancestor) can change it.
 - **Job:** a BullMQ job scheduler on `{droneaid-translate}` ticks every 30 s (saving or Update
-  adds an immediate tick). Each tick deletes translations of pages that are no longer shared,
-  then translates due rows one language at a time: each text block of the page becomes one
+  adds a tick 2 s later; kicks within that window share one job id, so a burst costs one tick).
+  Each tick deletes translations of pages that are trashed or no longer shared (one SQL
+  statement following core's share rule), queues again the translations of pages edited and
+  then left alone for `TRANSLATE_REFRESH_QUIET_MINUTES` (one SQL statement), then translates
+  due rows one language at a time, refreshing the row's `updated_at` after each chunk so a long
+  page is never handed to a second instance: each text block of the page becomes one
   Markdown block (Docmost's JSON → Markdown export), blocks are packed into ~4000-character
   chunks for Gemini, each chunk is structure-checked (block count, heading level, ⟦n⟧
   placeholders, link targets) with one retry, and a 429 backs off 1 min, doubling, up to six
@@ -244,19 +279,26 @@ like the Google sign-in keys.
   mentions, inline math and status chips travel as ⟦n⟧ placeholders. Nothing makes a page
   fail. Lost inside translated text: underline and text colour.
 - **Storage:** `droneaid_page_translations` (one row per page and language, ProseMirror
-  `content` snapshot, `source_hash`). Not pages, so never in the tree or search.
+  `content` snapshot, `source_hash`, and `source_updated_at` = the page's `updated_at` when
+  translated). Not pages, so never in the tree or search.
 - **Readers:** `POST /api/droneaid/translate/shared {pageId, lang?}` (public, same gate as core's
   share page-info). The share page shows a language menu; `?lang=xx` picks a language, and an
   unknown one shows the original. The share page's `<title>`, `og:title` and `<html lang>`
   follow `?lang=` too.
-- **Out of date:** the source hash ignores block ids, schema defaults and comments, so opening
-  a page does not flag it. Re-translation is manual (Update).
+- **Out of date:** a translation is served only while it was made from the page's current text.
+  Readers (`/shared`, the language menu, the SEO title) get the original as soon as an edit is
+  saved: a page not saved since translation passes on `source_updated_at` alone, in SQL; a
+  page saved since is hashed, and a save that left the text unchanged (a move, an icon) is
+  marked current again. The source hash ignores block ids, schema defaults and comments, so
+  opening a page does not flag it. Re-translation is automatic after the quiet period (the
+  model is not called when the text did not actually change); **Update** forces it at once.
 - **Unpublishing** deletes the page's translations on the next tick (≤ 30 s); a deleted page
   takes them with it (foreign key).
 
 E2E against a fake Gemini (the test serves it on 127.0.0.1:8295; start the dev server with
 `TRANSLATE_ENABLED=true GEMINI_API_KEY=fake-key
-TRANSLATE_GEMINI_BASE_URL=http://127.0.0.1:8295/v1beta/models` in `.env`):
+TRANSLATE_GEMINI_BASE_URL=http://127.0.0.1:8295/v1beta/models
+TRANSLATE_REFRESH_QUIET_MINUTES=0.1` in `.env`):
 
 ```bash
 DRONEAID_E2E_URL=http://localhost:3500 DRONEAID_E2E_EMAIL=... DRONEAID_E2E_PASSWORD=... \
