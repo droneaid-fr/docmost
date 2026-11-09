@@ -10,7 +10,8 @@
  *
  * Env overrides: E2E_BASE_URL (default http://localhost:3200), E2E_DATABASE_URL
  * (default: DATABASE_URL from the root .env). The test seeds rows directly in the DB
- * and restores the workspace domain list and the signup switch afterwards.
+ * (signup rules with run-unique patterns, spaces, invitations) and restores the
+ * workspace domain list and the signup switch afterwards.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -122,6 +123,32 @@ describe('Google sign-in (mock OIDC)', () => {
   let defaultRole: string;
   let providerId: string;
   let saved: { emailDomains: string[]; allowSignup: boolean };
+  const ruleIds: string[] = [];
+  const spaceIds: string[] = [];
+
+  async function insertRule(pattern: string, spaces: string[] = [], role = 'writer') {
+    const [r] = await sql`
+      insert into droneaid_signup_rules (workspace_id, pattern, space_ids, space_role)
+      values (${workspaceId}, ${pattern}, ${spaces}::uuid[], ${role})
+      returning id`;
+    ruleIds.push(r.id);
+    return r.id as string;
+  }
+
+  async function insertSpace(name: string) {
+    const [sp] = await sql`
+      insert into spaces (name, slug, workspace_id, visibility)
+      values (${name}, ${`${name}-${RUN}`.toLowerCase()}, ${workspaceId}, 'private')
+      returning id`;
+    spaceIds.push(sp.id);
+    return sp.id as string;
+  }
+
+  async function spaceRole(userId: string, spaceId: string) {
+    const rows = await sql`
+      select role from space_members where user_id = ${userId} and space_id = ${spaceId}`;
+    return rows[0]?.role ?? null;
+  }
 
   async function insertUser(email: string, extra: Record<string, unknown> = {}) {
     const [u] = await sql`
@@ -167,11 +194,19 @@ describe('Google sign-in (mock OIDC)', () => {
       allowSignup: provider.allow_signup,
     };
 
-    await sql`update workspaces set email_domains = ${[ALLOWED]} where id = ${workspaceId}`;
+    // Rules, not core email_domains, decide Google signup. Clear the domain list so
+    // the invite cases are not restricted by it (restored afterwards).
+    await sql`update workspaces set email_domains = ${[]} where id = ${workspaceId}`;
+    await insertRule(ALLOWED);
     await setAllowSignup(true);
   });
 
   afterAll(async () => {
+    if (ruleIds.length) await sql`delete from droneaid_signup_rules where id in ${sql(ruleIds)}`;
+    if (spaceIds.length) {
+      await sql`delete from space_members where space_id in ${sql(spaceIds)}`;
+      await sql`delete from spaces where id in ${sql(spaceIds)}`;
+    }
     await sql`update workspaces set email_domains = ${saved.emailDomains} where id = ${workspaceId}`;
     await setAllowSignup(saved.allowSignup);
     await sql.end();
@@ -197,7 +232,7 @@ describe('Google sign-in (mock OIDC)', () => {
     expect((await me(again.authToken)).id).toBe(userId);
   });
 
-  it('new user with an allowed domain: signs up with the default role and group', async () => {
+  it('new user matching a rule: signs up with the default role and group', async () => {
     const email = `newbie@${ALLOWED}`;
     const r = await googleFlow(`sub-newbie-${RUN}`, verified(email, 'New Bie'));
     expect(r.location).toBe(`${BASE}/home`);
@@ -215,7 +250,7 @@ describe('Google sign-in (mock OIDC)', () => {
     expect(row.emailVerifiedAt ?? row.email_verified_at).not.toBeNull();
   });
 
-  it('new user with a disallowed domain: refused, no user created', async () => {
+  it('new user matching no rule: refused, no user created', async () => {
     const email = `mallory@gmail-${RUN}.test`;
     const r = await googleFlow(`sub-mallory-${RUN}`, verified(email));
     expect(r.location).toBe(`${BASE}/login?google_error=domain_not_allowed`);
@@ -235,7 +270,7 @@ describe('Google sign-in (mock OIDC)', () => {
     expect(r.authToken).toBeUndefined();
   });
 
-  it('existing user whose domain is not allowed: still signs in', async () => {
+  it('existing user outside every rule: still signs in', async () => {
     const email = `legacy@${OTHER}`;
     const userId = await insertUser(email);
     const r = await googleFlow(`sub-legacy-${RUN}`, verified(email));
@@ -267,5 +302,122 @@ describe('Google sign-in (mock OIDC)', () => {
     });
     expect(r.location).toBe(`${BASE}/login?google_error=state_mismatch`);
     expect(r.authToken).toBeUndefined();
+  });
+  describe('signup rules and invitations', () => {
+    it('allowlisted account lands in its space with the granted role', async () => {
+      const space = await insertSpace('Ops');
+      const domain = `ops-${RUN}.test`;
+      await insertRule(`*.${domain}`, [space], 'reader');
+      const r = await googleFlow(`sub-ops-${RUN}`, verified(`pilot@team.${domain}`));
+      expect(r.location).toBe(`${BASE}/home`);
+      const user = await me(r.authToken);
+      expect(await spaceRole(user.id, space)).toBe('reader');
+    });
+
+    it('two rules granting the same space: the stronger role wins', async () => {
+      const space = await insertSpace('Board');
+      const domain = `board-${RUN}.test`;
+      await insertRule(domain, [space], 'reader');
+      await insertRule(`chair@${domain}`, [space], 'admin');
+      await insertRule(`*.${domain}`, [space], 'writer');
+      const r = await googleFlow(`sub-chair-${RUN}`, verified(`chair@${domain}`));
+      const user = await me(r.authToken);
+      expect(await spaceRole(user.id, space)).toBe('admin');
+    });
+
+    it('a deleted space in a rule is skipped without failing signup', async () => {
+      const kept = await insertSpace('Kept');
+      const gone = randomUUID();
+      const domain = `gone-${RUN}.test`;
+      await insertRule(domain, [gone, kept], 'writer');
+      const r = await googleFlow(`sub-gonespace-${RUN}`, verified(`x@${domain}`));
+      expect(r.location).toBe(`${BASE}/home`);
+      const user = await me(r.authToken);
+      expect(await spaceRole(user.id, kept)).toBe('writer');
+      expect(await spaceRole(user.id, gone)).toBeNull();
+    });
+
+    it('non-allowlisted account is refused even with signup on', async () => {
+      const email = `nobody@nowhere-${RUN}.test`;
+      const r = await googleFlow(`sub-nobody-${RUN}`, verified(email));
+      expect(r.location).toBe(`${BASE}/login?google_error=domain_not_allowed`);
+      expect(await sql`select id from users where lower(email) = ${email}`).toHaveLength(0);
+    });
+
+    it('pending invitation: admitted without a rule, joins via the invite', async () => {
+      await setAllowSignup(false);
+      try {
+        const [inviter] = await sql`
+          select id from users where workspace_id = ${workspaceId} and role in ('owner','admin')
+          order by created_at limit 1`;
+        const [group] = await sql`
+          insert into groups (name, workspace_id, is_default)
+          values (${`Invited-${RUN}`}, ${workspaceId}, false) returning id`;
+        const space = await insertSpace('Invited');
+        await sql`insert into space_members (space_id, group_id, role)
+                  values (${space}, ${group.id}, 'writer')`;
+        const email = `guest@invited-${RUN}.test`;
+        const [inv] = await sql`
+          insert into workspace_invitations
+            (email, role, token, group_ids, invited_by_id, workspace_id, expires_at)
+          values (${email}, 'admin', ${'tok-' + RUN}, ${[group.id]}::uuid[],
+                  ${inviter?.id ?? null}, ${workspaceId}, now() + interval '1 day')
+          returning id`;
+
+        const r = await googleFlow(`sub-guest-${RUN}`, verified(email.toUpperCase()));
+        expect(r.location).toBe(`${BASE}/home`);
+        const user = await me(r.authToken);
+        expect(user.email).toBe(email);
+        expect(user.role).toBe('admin');
+        const groups = await sql`select group_id from group_users where user_id = ${user.id}`;
+        expect(groups.map((g) => g.groupId ?? g.group_id)).toContain(group.id);
+        expect(await sql`select id from workspace_invitations where id = ${inv.id}`).toHaveLength(0);
+
+        await sql`delete from group_users where group_id = ${group.id}`;
+        await sql`delete from space_members where group_id = ${group.id}`;
+        await sql`delete from groups where id = ${group.id}`;
+      } finally {
+        await setAllowSignup(true);
+      }
+    });
+
+    it('expired invitation does not admit', async () => {
+      await setAllowSignup(false);
+      try {
+        const email = `late@expired-${RUN}.test`;
+        await sql`
+          insert into workspace_invitations (email, role, token, workspace_id, expires_at)
+          values (${email}, 'member', ${'tok2-' + RUN}, ${workspaceId}, now() - interval '1 minute')`;
+        const r = await googleFlow(`sub-expired-${RUN}`, verified(email));
+        expect(r.location).toBe(`${BASE}/login?google_error=signup_disabled`);
+      } finally {
+        await setAllowSignup(true);
+      }
+    });
+
+    it('invite acceptance through core also applies rule grants', async () => {
+      const space = await insertSpace('Accept');
+      const domain = `accept-${RUN}.test`;
+      await insertRule(domain, [space], 'writer');
+      const email = `invitee@${domain}`;
+      const token = `tok3-${RUN}`;
+      const [inv] = await sql`
+        insert into workspace_invitations (email, role, token, workspace_id, expires_at)
+        values (${email}, 'member', ${token}, ${workspaceId}, now() + interval '1 day')
+        returning id`;
+      const res = await fetch(`${BASE}/api/workspace/invites/accept`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          invitationId: inv.id,
+          token,
+          name: 'Invitee',
+          password: 'correct-horse-battery',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const [user] = await sql`select id from users where email = ${email}`;
+      expect(await spaceRole(user.id, space)).toBe('writer');
+    });
   });
 });
