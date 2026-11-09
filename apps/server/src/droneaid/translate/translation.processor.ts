@@ -9,7 +9,9 @@ import { Job, Queue } from 'bullmq';
 import { TranslationProvider } from './translation.provider';
 import { TranslationWorker } from './translation.worker';
 import {
+  KICK_DEBOUNCE_MS,
   TICK_BUDGET_MS,
+  TRANSLATE_KICK_JOB_ID,
   TRANSLATE_QUEUE,
   TRANSLATE_SCHEDULER_ID,
   TRANSLATE_TICK_JOB,
@@ -76,11 +78,24 @@ export class TranslationScheduler implements OnApplicationBootstrap {
     }
   }
 
-  /** Runs a tick soon, outside the 30 s rhythm. */
+  /**
+   * Runs a tick soon, outside the 30 s rhythm. Debounced: while a kick is
+   * waiting, further kicks add nothing (same job id), so a burst of saves
+   * costs one tick.
+   */
   async kick(): Promise<void> {
     if (!this.provider.enabled) return;
     try {
-      await this.queue.add(TRANSLATE_TICK_JOB, {});
+      await this.queue.add(
+        TRANSLATE_TICK_JOB,
+        {},
+        {
+          jobId: TRANSLATE_KICK_JOB_ID,
+          delay: KICK_DEBOUNCE_MS,
+          // A kept failed job would swallow every later kick (same id).
+          removeOnFail: true,
+        },
+      );
     } catch (err) {
       this.logger.warn(`Could not queue a translation tick: ${err}`);
     }

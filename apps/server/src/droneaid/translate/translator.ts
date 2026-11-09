@@ -48,6 +48,7 @@ async function translateChunk(
 /**
  * Translates Markdown blocks chunk by chunk; the result has one block per
  * source block, in order. Sequential on purpose: Gemini quotas are per minute.
+ * `onChunk` runs after each chunk (the worker's heartbeat).
  */
 export async function translateBlocks(options: {
   blocks: string[];
@@ -55,6 +56,7 @@ export async function translateBlocks(options: {
   to: TranslationLanguage;
   generate: GenerateText;
   maxChunkChars?: number;
+  onChunk?: () => Promise<void>;
 }): Promise<string[]> {
   const system = systemPrompt(options.from, options.to);
   const translated: string[] = [];
@@ -64,6 +66,7 @@ export async function translateBlocks(options: {
   );
   for (const chunk of chunks) {
     translated.push(...(await translateChunk(chunk, system, options.generate)));
+    await options.onChunk?.();
   }
   return translated;
 }

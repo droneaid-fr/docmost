@@ -45,7 +45,8 @@ function setup(opts: {
     fail: jest.fn(),
     postpone: jest.fn(),
     deleteForPage: jest.fn(),
-    pageIds: jest.fn().mockResolvedValue([PAGE.id, 'gone']),
+    deleteUnshared: jest.fn().mockResolvedValue(2),
+    heartbeat: jest.fn(async () => undefined),
   };
   const pageRepo = {
     findById: jest.fn(async (id: string) =>
@@ -196,16 +197,24 @@ describe('TranslationWorker', () => {
     ]);
   });
 
-  it('sweep drops pages that are gone or unshared', async () => {
-    const { worker, repo } = setup({ hasShare: false });
+  it('sweep deletes unshared translations in one statement', async () => {
+    const { worker, repo } = setup({});
     expect(await worker.sweep()).toBe(2);
-    expect(repo.deleteForPage).toHaveBeenCalledWith('gone');
-    expect(repo.deleteForPage).toHaveBeenCalledWith(PAGE.id);
+    expect(repo.deleteUnshared).toHaveBeenCalledTimes(1);
   });
 
-  it('sweep keeps shared pages', async () => {
-    const { worker, repo } = setup({});
-    expect(await worker.sweep()).toBe(1);
-    expect(repo.deleteForPage).toHaveBeenCalledWith('gone');
+  it('beats the heartbeat after every chunk of a long page', async () => {
+    const long = {
+      ...PAGE,
+      content: htmlToJson(
+        Array.from({ length: 30 }, (_, i) => `<p>alpha ${'beta '.repeat(40)}${i}</p>`).join(''),
+      ),
+    };
+    const { worker, repo } = setup({ page: long });
+    await worker.processNext();
+    expect(repo.complete).toHaveBeenCalledTimes(1);
+    // ~6 kB of text: more than one 4 kB chunk, one beat each
+    expect(repo.heartbeat.mock.calls.length).toBeGreaterThan(1);
+    expect(repo.heartbeat).toHaveBeenCalledWith('r1');
   });
 });

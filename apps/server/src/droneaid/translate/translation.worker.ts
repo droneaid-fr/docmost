@@ -33,6 +33,7 @@ export async function translatePage(options: {
   to: Parameters<typeof translateBlocks>[0]['to'];
   generate: Parameters<typeof translateBlocks>[0]['generate'];
   maxChunkChars?: number;
+  onChunk?: () => Promise<void>;
 }): Promise<{ title: string; content: any }> {
   const title = (options.title ?? '').trim();
   const extracted = extractBlocks(options.content);
@@ -47,6 +48,7 @@ export async function translatePage(options: {
     to: options.to,
     generate: options.generate,
     maxChunkChars: options.maxChunkChars,
+    onChunk: options.onChunk,
   });
   const body = title ? translated.slice(1) : translated;
   return {
@@ -66,18 +68,12 @@ export class TranslationWorker {
     private readonly provider: TranslationProvider,
   ) {}
 
-  /** Deletes the translations of pages that are no longer shared. */
-  async sweep(): Promise<number> {
-    let removed = 0;
-    for (const pageId of await this.repo.pageIds()) {
-      const page = await this.pageRepo.findById(pageId);
-      if (page && !page.deletedAt && (await this.access.hasShare(page))) {
-        continue;
-      }
-      await this.repo.deleteForPage(pageId);
-      removed++;
-    }
-    return removed;
+  /**
+   * Deletes the translations of pages that are trashed or no longer shared,
+   * in one statement (TranslationRepo.deleteUnshared).
+   */
+  sweep(): Promise<number> {
+    return this.repo.deleteUnshared();
   }
 
   /** Queues translations of pages edited and then left alone long enough. */
@@ -148,6 +144,9 @@ export class TranslationWorker {
       from: sourceLang,
       to: lang,
       generate,
+      // Keeps the claim fresh, so STALE_RUN_MS never hands a long page to a
+      // second instance while this one is still translating it.
+      onChunk: () => this.repo.heartbeat(row.id),
     });
     await this.repo.complete(row.id, {
       title: result.title,

@@ -300,13 +300,56 @@ export class TranslationRepo {
     return Number(result.numAffectedRows ?? 0);
   }
 
-  async pageIds(): Promise<string[]> {
-    const rows = await this.db
-      .selectFrom('droneaidPageTranslations')
-      .select('pageId')
-      .distinct()
+  /** A running row is still being worked on (see STALE_RUN_MS). */
+  async heartbeat(id: string): Promise<void> {
+    await this.db
+      .updateTable('droneaidPageTranslations')
+      .set({ updatedAt: new Date() })
+      .where('id', '=', id)
+      .where('status', '=', 'running')
       .execute();
-    return rows.map((row) => row.pageId);
+  }
+
+  /**
+   * Deletes the translations of pages that are trashed, gone or no longer
+   * reachable through a share, in one statement. "Reachable" is core's rule
+   * (ShareService.getShareForPage): the page's own share, or the nearest
+   * shared ancestor when that share includes sub-pages, at most 25 levels up,
+   * in the page's workspace.
+   */
+  async deleteUnshared(): Promise<number> {
+    const result = await sql`
+      with recursive chain as (
+        select p.id as origin, p.workspace_id as page_ws, p.parent_page_id,
+               0 as level, s.id as share_id, s.include_sub_pages,
+               s.workspace_id as share_ws
+          from (select distinct page_id from droneaid_page_translations) tp
+          join pages p on p.id = tp.page_id and p.deleted_at is null
+          left join shares s on s.page_id = p.id
+        union all
+        select c.origin, c.page_ws, p.parent_page_id, c.level + 1, s.id,
+               s.include_sub_pages, s.workspace_id
+          from chain c
+          join pages p on p.id = c.parent_page_id and p.deleted_at is null
+          left join shares s on s.page_id = p.id
+         where c.share_id is null and c.level < 25
+      ),
+      nearest as (
+        select distinct on (origin) origin, level, include_sub_pages,
+               share_ws, page_ws
+          from chain
+         where share_id is not null
+         order by origin, level
+      )
+      delete from droneaid_page_translations t
+       where not exists (
+         select 1 from nearest n
+          where n.origin = t.page_id
+            and n.share_ws = n.page_ws
+            and (n.level = 0 or n.include_sub_pages)
+       )
+    `.execute(this.db);
+    return Number(result.numAffectedRows ?? 0);
   }
 
   async deleteForPage(pageId: string): Promise<void> {
