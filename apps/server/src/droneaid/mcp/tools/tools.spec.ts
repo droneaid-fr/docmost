@@ -4,7 +4,7 @@ import {
   listDocumentsTool,
   readDocumentTool,
 } from './documents';
-import { docSearchTool, plainExcerpt } from './search';
+import { anyWordQuery, docSearchTool, plainExcerpt } from './search';
 import { buildTree, listFoldersTool } from './folders';
 import { toolsForCaller } from './define';
 import { ALL_TOOLS } from './index';
@@ -434,6 +434,51 @@ describe('doc_search', () => {
       (await docSearchTool.execute({ query: 'd', space_id: 'general' }, ctx))
         .isError,
     ).toBe(true);
+  });
+
+  it('accepts a space name as space_id', async () => {
+    const { ctx, deps } = makeCtx();
+    await docSearchTool.execute({ query: 'd', space_id: 'shared ' }, ctx);
+    await docSearchTool.execute({ query: 'd', space_id: 'SHARED' }, ctx);
+    expect(deps.searchService.searchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ spaceId: 'sp-shared' }),
+      expect.anything(),
+    );
+    const out = json(
+      await docSearchTool.execute({ query: 'd', space_id: 'Agent Space' }, ctx),
+    );
+    expect(out.hits.map((h: any) => h.doc_id)).toEqual(['p-agent']);
+  });
+
+  it('falls back to any word when no document has them all', async () => {
+    const { ctx, deps } = makeCtx();
+    deps.searchService.searchPage.mockImplementationOnce(async () => ({
+      items: [],
+    }));
+    const out = json(
+      await docSearchTool.execute({ query: 'vent maximal démonstrations' }, ctx),
+    );
+    expect(deps.searchService.searchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ query: 'vent or maximal or démonstrations' }),
+      expect.anything(),
+    );
+    expect(out.match).toBe('any');
+    expect(out.hits.length).toBeGreaterThan(0);
+  });
+
+  it('keeps match "all" when every word matched', async () => {
+    const { ctx, deps } = makeCtx();
+    const out = json(await docSearchTool.execute({ query: 'drones notes' }, ctx));
+    expect(out.match).toBe('all');
+    expect(deps.searchService.searchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('anyWordQuery leaves single words and search syntax alone', () => {
+    expect(anyWordQuery('vent')).toBeNull();
+    expect(anyWordQuery('"vent fort"')).toBeNull();
+    expect(anyWordQuery('a | b')).toBeNull();
+    expect(anyWordQuery('vent or pluie')).toBe('vent or pluie');
+    expect(anyWordQuery('vent  et pluie')).toBe('vent or et or pluie');
   });
 
   it('plainExcerpt turns <b> into bold and strips other tags', () => {

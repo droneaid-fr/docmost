@@ -157,7 +157,7 @@ export const createFolderTool = defineTool({
     .object({
       name: NAME,
       parent_id: ID.optional().describe('Parent folder (page) id'),
-      space_id: ID.optional().describe('Space id or slug; default: your own space'),
+      space_id: ID.optional().describe('Space id, slug or name; default: your own space'),
     })
     .strict(),
   execute: async ({ name, parent_id, space_id }, ctx) => {

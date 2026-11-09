@@ -55,7 +55,7 @@ export const listDocumentsTool = defineTool({
         .min(1)
         .max(100)
         .optional()
-        .describe('Space id or slug'),
+        .describe('Space id, slug or name'),
       parent_id: z
         .string()
         .min(1)

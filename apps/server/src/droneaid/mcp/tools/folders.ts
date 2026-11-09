@@ -43,7 +43,7 @@ export const listFoldersTool = defineTool({
         .min(1)
         .max(100)
         .optional()
-        .describe('Space id or slug'),
+        .describe('Space id, slug or name'),
       max_depth: z.number().int().min(1).max(50).optional(),
     })
     .strict(),

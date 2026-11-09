@@ -16,11 +16,26 @@ export function plainExcerpt(highlight: string | undefined): string {
     .trim();
 }
 
+/** pg-tsquery keywords; dropped from an any-word query so they stay words. */
+const OPERATOR_WORDS = new Set(['or', 'and', 'not']);
+
+/**
+ * The query with its words joined by OR (pg-tsquery syntax), or null when it
+ * has fewer than two plain words or already uses search syntax.
+ */
+export function anyWordQuery(query: string): string | null {
+  if (/["'()|&!:<>-]/.test(query)) return null;
+  const words = query
+    .split(/\s+/)
+    .filter((w) => w && !OPERATOR_WORDS.has(w.toLowerCase()));
+  return words.length >= 2 ? words.join(' or ') : null;
+}
+
 export const docSearchTool = defineTool({
   name: 'doc_search',
   title: 'Document Search',
   description:
-    'Full-text search over the documents you can read (title and body, Postgres full-text, prefix match on the last word). Returns hits with id, title, `[Title](url)` link, space and an excerpt where matches are **bold**. Optionally limit to one space or to given doc ids.',
+    'Full-text search over the documents you can read (title and body, Postgres full-text, prefix match on the last word). All words must match; if no document has them all, documents with any of the words are returned, best first, and `match` is "any". Returns hits with id, title, `[Title](url)` link, space and an excerpt where matches are **bold**. Optionally limit to one space or to given doc ids.',
   access: 'read',
   audience: 'all',
   inputSchema: z
@@ -31,7 +46,7 @@ export const docSearchTool = defineTool({
         .min(1)
         .max(100)
         .optional()
-        .describe('Space id or slug'),
+        .describe('Space id, slug or name'),
       doc_ids: z.array(z.string().min(1).max(100)).max(50).optional(),
       limit: z.number().int().min(1).max(20).optional(),
     })
@@ -47,15 +62,25 @@ export const docSearchTool = defineTool({
     // SearchService applies the caller's space memberships and page-level
     // restrictions itself; with spaceId set it trusts the caller to have
     // checked the space, which scopeSpaces just did.
-    const { items } = await ctx.deps.searchService.searchPage(
-      {
-        query,
-        spaceId: space_id ? spaces[0].id : undefined,
-        limit: doc_ids?.length ? NARROWED_FETCH : max,
-        offset: 0,
-      },
-      { userId: ctx.user.id, workspaceId: ctx.workspace.id },
-    );
+    const search = async (q: string) =>
+      (
+        await ctx.deps.searchService.searchPage(
+          {
+            query: q,
+            spaceId: space_id ? spaces[0].id : undefined,
+            limit: doc_ids?.length ? NARROWED_FETCH : max,
+            offset: 0,
+          },
+          { userId: ctx.user.id, workspaceId: ctx.workspace.id },
+        )
+      ).items;
+    let match: 'all' | 'any' = 'all';
+    let items = await search(query);
+    const anyQuery = items.length === 0 ? anyWordQuery(query) : null;
+    if (anyQuery) {
+      items = await search(anyQuery);
+      match = 'any';
+    }
 
     const wanted = doc_ids?.length ? new Set(doc_ids) : null;
     const bySpace = new Map(spaces.map((s) => [s.id, s]));
@@ -76,6 +101,6 @@ export const docSearchTool = defineTool({
           excerpt: plainExcerpt(item.highlight),
         };
       });
-    return toolJson({ retrieval_mode: 'fulltext', hits });
+    return toolJson({ retrieval_mode: 'fulltext', match, hits });
   },
 });

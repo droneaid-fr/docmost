@@ -130,12 +130,18 @@ export class McpToolContext {
     return result.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }
 
+  /** By id or slug, else by name (case-insensitive) when that is unique. */
   async readableSpace(spaceIdOrSlug: string): Promise<ReadableSpace | null> {
     const spaces = await this.readableSpaces();
-    return (
-      spaces.find((s) => s.id === spaceIdOrSlug || s.slug === spaceIdOrSlug) ??
-      null
+    const exact = spaces.find(
+      (s) => s.id === spaceIdOrSlug || s.slug === spaceIdOrSlug,
     );
+    if (exact) return exact;
+    const name = spaceIdOrSlug.trim().toLocaleLowerCase();
+    const named = spaces.filter(
+      (s) => (s.name ?? '').trim().toLocaleLowerCase() === name,
+    );
+    return named.length === 1 ? named[0] : null;
   }
 
   /**

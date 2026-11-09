@@ -68,7 +68,7 @@ export const createDocumentTool = defineTool({
         .min(1)
         .max(100)
         .optional()
-        .describe('Space id or slug; defaults to your own space'),
+        .describe('Space id, slug or name; defaults to your own space'),
     })
     .strict(),
   execute: async ({ title, content, folder_id, space_id }, ctx) => {
