@@ -222,5 +222,42 @@
   },
   "eeStubs": {
     "notAvailable": "{{what}} n’est pas disponible dans cette édition."
+  },
+  "personalMcp": {
+    "title": "Jetons MCP",
+    "intro": "Un jeton MCP personnel permet à un client IA que vous utilisez (Claude, Cursor, …) de lire et modifier DroneAid Base en votre nom, avec exactement vos droits : il ne voit que les espaces que vous voyez et n’écrit que là où vous le pouvez. Traitez-le comme un mot de passe. La désactivation ou la suppression de votre compte arrête tous vos jetons.",
+    "endpoint": "Point d’accès MCP :",
+    "copy": "Copier",
+    "loading": "Chargement…",
+    "agentRefused": "Les comptes agents ne peuvent pas avoir de jetons MCP personnels. Un administrateur gère les jetons d’agents dans Paramètres → Agents.",
+    "activeCount": "{{active}} jetons actifs sur {{max}}",
+    "create": "Créer un jeton",
+    "createSubmit": "Créer",
+    "newToken": "Votre nouveau jeton MCP",
+    "name": "Nom",
+    "namePlaceholder": "ex. Claude sur mon portable",
+    "expiry": "Expiration",
+    "expiryChoice": {
+      "30": "Dans 30 jours",
+      "90": "Dans 90 jours",
+      "365": "Dans 1 an",
+      "never": "Jamais"
+    },
+    "showOnce": "Copiez-le maintenant. Il n’est affiché qu’une fois ; seul son hachage est conservé.",
+    "copyToken": "Copier le jeton",
+    "exampleConfig": "Exemple de configuration client (JSON mcpServers)",
+    "copyConfig": "Copier la configuration",
+    "claudeCode": "Ou avec Claude Code",
+    "copyCommand": "Copier la commande",
+    "none": "Aucun jeton pour l’instant.",
+    "token": "Jeton",
+    "created": "Créé",
+    "lastUsed": "Dernière utilisation",
+    "expires": "Expire",
+    "never": "Jamais",
+    "revoked": "révoqué",
+    "expired": "expiré",
+    "revoke": "Révoquer",
+    "revokeConfirm": "Révoquer le jeton « {{name}} » ? Les clients qui l’utilisent s’arrêtent aussitôt."
   }
 }

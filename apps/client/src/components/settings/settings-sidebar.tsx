@@ -18,6 +18,7 @@ import {
   IconShieldCheck,
   IconRobot,
   IconUserCheck,
+  IconPlugConnected,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -47,6 +48,7 @@ import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sideb
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
 import { useInstalledIntegrations } from "@/features/integration/queries/integration-query";
+import { usePersonalMcpAllowed } from "@/droneaid/personal-mcp/personal-mcp-api";
 
 type DataItem = {
   label: string;
@@ -56,6 +58,8 @@ type DataItem = {
   role?: "admin" | "owner";
   env?: "cloud" | "selfhosted";
   requiresInstalledIntegration?: boolean;
+  // DroneAid: hidden for agent accounts
+  requiresPersonalMcp?: boolean;
 };
 
 type DataGroup = {
@@ -84,6 +88,13 @@ const groupedData: DataGroup[] = [
         icon: IconPlug,
         path: "/settings/account/connections",
         requiresInstalledIntegration: true,
+      },
+      // DroneAid: personal MCP tokens
+      {
+        label: "MCP tokens",
+        icon: IconPlugConnected,
+        path: "/settings/account/droneaid/mcp-tokens",
+        requiresPersonalMcp: true,
       },
     ],
   },
@@ -170,6 +181,7 @@ export default function SettingsSidebar() {
   }, [location.pathname]);
 
   const { data: installedIntegrations } = useInstalledIntegrations();
+  const personalMcpAllowed = usePersonalMcpAllowed();
 
   const hasFeature = (f: string) =>
     entitlements?.features?.includes(f) ?? false;
@@ -182,6 +194,7 @@ export default function SettingsSidebar() {
     if (item.requiresInstalledIntegration && !installedIntegrations?.length) {
       return false;
     }
+    if (item.requiresPersonalMcp && !personalMcpAllowed) return false;
     // DroneAid: licence-gated (Enterprise) items are hidden, not greyed out
     if (isItemDisabled(item)) return false;
     return true;

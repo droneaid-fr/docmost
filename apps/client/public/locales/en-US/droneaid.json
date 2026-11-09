@@ -222,5 +222,42 @@
   },
   "eeStubs": {
     "notAvailable": "{{what}} is not available in this edition."
+  },
+  "personalMcp": {
+    "title": "MCP tokens",
+    "intro": "A personal MCP token lets an AI client you use (Claude, Cursor, …) read and edit DroneAid Base as you, with exactly your permissions: it sees only the spaces you see and can write only where you can. Treat it like a password. Deactivating or removing your account stops all your tokens.",
+    "endpoint": "MCP endpoint:",
+    "copy": "Copy",
+    "loading": "Loading…",
+    "agentRefused": "Agent accounts cannot have personal MCP tokens. A workspace admin manages agent tokens under Settings → Agents.",
+    "activeCount": "{{active}} of {{max}} active tokens",
+    "create": "Create token",
+    "createSubmit": "Create",
+    "newToken": "Your new MCP token",
+    "name": "Name",
+    "namePlaceholder": "e.g. Claude on my laptop",
+    "expiry": "Expires",
+    "expiryChoice": {
+      "30": "In 30 days",
+      "90": "In 90 days",
+      "365": "In 1 year",
+      "never": "Never"
+    },
+    "showOnce": "Copy it now. It is shown only once; only its hash is stored.",
+    "copyToken": "Copy token",
+    "exampleConfig": "Example client configuration (mcpServers JSON)",
+    "copyConfig": "Copy configuration",
+    "claudeCode": "Or with Claude Code",
+    "copyCommand": "Copy command",
+    "none": "No tokens yet.",
+    "token": "Token",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "expires": "Expires",
+    "never": "Never",
+    "revoked": "revoked",
+    "expired": "expired",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke token \"{{name}}\"? Clients using it stop working at once."
   }
 }

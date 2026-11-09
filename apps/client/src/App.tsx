@@ -56,6 +56,10 @@ const SpacesPage = lazyWithPrefetch(() => import("@/pages/spaces/spaces.tsx"));
 const DroneaidAgents = lazyWithPrefetch(
   () => import("@/droneaid/agents/agents-settings-page.tsx"),
 );
+// DroneAid: personal MCP tokens (account settings)
+const DroneaidPersonalMcp = lazyWithPrefetch(
+  () => import("@/droneaid/personal-mcp/personal-mcp-page.tsx"),
+);
 // DroneAid: signup allowlist admin page
 const DroneaidSignupRules = lazyWithPrefetch(
   () => import("@/droneaid/signup-rules/signup-rules-page.tsx"),
@@ -147,6 +151,10 @@ export default function App() {
               element={<AccountPreferences />}
             />
             <Route path={"account/connections"} element={<Connections />} />
+            <Route
+              path={"account/droneaid/mcp-tokens"}
+              element={<DroneaidPersonalMcp />}
+            />
             <Route path={"workspace"} element={<WorkspaceSettings />} />
             <Route path={"members"} element={<WorkspaceMembers />} />
             <Route path={"groups"} element={<Groups />} />
