@@ -29,6 +29,19 @@ export interface DroneaidAgentTokens {
   revokedAt: Timestamp | null;
 }
 
+export interface DroneaidUserMcpTokens {
+  id: Generated<string>;
+  userId: string;
+  workspaceId: string;
+  name: string;
+  tokenHash: string;
+  tokenPrefix: string;
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp | null;
+  lastUsedAt: Timestamp | null;
+  revokedAt: Timestamp | null;
+}
+
 export interface DroneaidSignupRules {
   id: Generated<string>;
   workspaceId: string;
@@ -71,6 +84,7 @@ export interface DroneaidImportMap {
 export interface DroneaidTables {
   droneaidAgents: DroneaidAgents;
   droneaidAgentTokens: DroneaidAgentTokens;
+  droneaidUserMcpTokens: DroneaidUserMcpTokens;
   droneaidSignupRules: DroneaidSignupRules;
   droneaidPageTranslations: DroneaidPageTranslations;
   droneaidImportMap: DroneaidImportMap;
@@ -81,6 +95,7 @@ export type DroneaidTransaction = Transaction<DbInterface & DroneaidTables>;
 
 export type DroneaidAgent = Selectable<DroneaidAgents>;
 export type DroneaidAgentToken = Selectable<DroneaidAgentTokens>;
+export type DroneaidUserMcpToken = Selectable<DroneaidUserMcpTokens>;
 export type DroneaidSignupRule = Selectable<DroneaidSignupRules>;
 export type DroneaidPageTranslation = Selectable<DroneaidPageTranslations>;
 

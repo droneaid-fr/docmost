@@ -1,6 +1,11 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { AGENT_AUTH_TYPE, McpAuthGuard } from './mcp-auth.guard';
+import {
+  AGENT_AUTH_TYPE,
+  McpAuthGuard,
+  PERSONAL_TOKEN_AUTH_TYPE,
+} from './mcp-auth.guard';
 import { generateAgentToken } from '../agents/agent-token.util';
+import { generatePersonalToken } from '../personal-tokens/personal-token.util';
 
 const WS = { id: 'ws-1' };
 const AGENT_USER = { id: 'agent-1' };
@@ -49,6 +54,14 @@ function makeGuard(over: Record<string, any> = {}) {
       .mockResolvedValue({ user: HUMAN, workspace: WS, authType: 'access' }),
     ...over.strategy,
   };
+  const personalTokenService = {
+    authenticate: jest.fn().mockResolvedValue({
+      user: HUMAN,
+      workspaceId: 'ws-1',
+      tokenId: 'pt',
+    }),
+    ...over.personalTokenService,
+  };
   const workspaceRepo = { findById: jest.fn().mockResolvedValue(WS) };
   const moduleRef = { get: jest.fn().mockReturnValue(strategy) };
   const guard = new McpAuthGuard(
@@ -56,8 +69,9 @@ function makeGuard(over: Record<string, any> = {}) {
     tokenService as any,
     workspaceRepo as any,
     moduleRef as any,
+    personalTokenService as any,
   );
-  return { guard, agentService, tokenService, strategy };
+  return { guard, agentService, tokenService, strategy, personalTokenService };
 }
 
 describe('McpAuthGuard', () => {
@@ -156,5 +170,66 @@ describe('McpAuthGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow(
       'Agents must use an agent token',
     );
+  });
+
+  describe('personal tokens', () => {
+    it('act as the member, like a session JWT (no agent space)', async () => {
+      const { guard, agentService, tokenService, personalTokenService } =
+        makeGuard();
+      const token = generatePersonalToken();
+      const { context, req } = ctxFor({ authorization: `Bearer ${token}` });
+      await expect(guard.canActivate(context)).resolves.toBe(true);
+      expect(personalTokenService.authenticate).toHaveBeenCalledWith(token);
+      expect(req.user).toMatchObject({
+        user: HUMAN,
+        workspace: WS,
+        isAgent: false,
+        authType: PERSONAL_TOKEN_AUTH_TYPE,
+      });
+      expect(req.user.agentSpaceId).toBeUndefined();
+      expect(agentService.authenticate).not.toHaveBeenCalled();
+      expect(tokenService.verifyJwt).not.toHaveBeenCalled();
+    });
+
+    it('refuses a revoked, expired, unknown or agent-owned token', async () => {
+      const { guard } = makeGuard({
+        personalTokenService: {
+          authenticate: jest.fn().mockResolvedValue(null),
+        },
+      });
+      const { context } = ctxFor({
+        authorization: `Bearer ${generatePersonalToken()}`,
+      });
+      await expect(guard.canActivate(context)).rejects.toThrow(
+        'Invalid or revoked token',
+      );
+    });
+
+    it("refuses a token of another workspace than the request host's", async () => {
+      const { guard } = makeGuard();
+      const { context } = ctxFor(
+        { authorization: `Bearer ${generatePersonalToken()}` },
+        { raw: { workspaceId: 'ws-other' } },
+      );
+      await expect(guard.canActivate(context)).rejects.toThrow(
+        'Workspace does not match',
+      );
+    });
+
+    it('are never passed to the agent or JWT checks', async () => {
+      const { guard, agentService, tokenService } = makeGuard({
+        personalTokenService: {
+          authenticate: jest.fn().mockResolvedValue(null),
+        },
+      });
+      const { context } = ctxFor({
+        authorization: `Bearer ${generatePersonalToken()}`,
+      });
+      await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(agentService.authenticate).not.toHaveBeenCalled();
+      expect(tokenService.verifyJwt).not.toHaveBeenCalled();
+    });
   });
 });

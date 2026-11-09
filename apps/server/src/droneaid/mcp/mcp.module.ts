@@ -6,6 +6,7 @@ import { ExportService } from '../../integrations/export/export.service';
 import { CollaborationModule } from '../../collaboration/collaboration.module';
 import { AttachmentService } from '../../core/attachment/services/attachment.service';
 import { AgentsModule } from '../agents/agents.module';
+import { PersonalTokensModule } from '../personal-tokens/personal-tokens.module';
 import { McpAuthGuard } from './mcp-auth.guard';
 import { McpBodyLimit } from './mcp-body-limit';
 import { McpController } from './mcp.controller';
@@ -16,6 +17,7 @@ import { McpToolDeps } from './tools/context';
 @Module({
   imports: [
     AgentsModule,
+    PersonalTokensModule,
     TokenModule,
     PageModule,
     SearchModule,

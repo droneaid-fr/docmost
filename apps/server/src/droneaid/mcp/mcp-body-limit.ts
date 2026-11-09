@@ -4,6 +4,8 @@ import { TokenService } from '../../core/auth/services/token.service';
 import { JwtType } from '../../core/auth/dto/jwt-payload';
 import { AgentService } from '../agents/agent.service';
 import { isAgentToken } from '../agents/agent-token.util';
+import { PersonalTokenService } from '../personal-tokens/personal-token.service';
+import { isPersonalToken } from '../personal-tokens/personal-token.util';
 
 export const MCP_ROUTE_PATH = '/api/droneaid/mcp';
 
@@ -18,14 +20,15 @@ const REFUSAL_LOG_INTERVAL_MS = 10_000;
 
 export type BearerChecks = {
   isLiveAgentToken: (token: string) => Promise<boolean>;
+  isLivePersonalToken: (token: string) => Promise<boolean>;
   isValidJwt: (token: string) => Promise<boolean>;
 };
 
 /**
  * Why a request to the MCP route is refused before its body is read, or
  * null to let it through to McpAuthGuard (which does the full check). Only
- * cheap checks: header shape, an agent token's row (one indexed lookup), a
- * JWT's signature and expiry.
+ * cheap checks: header shape, an agent or personal token's row (one indexed
+ * lookup), a JWT's signature and expiry.
  */
 export async function bearerRefusal(
   authorization: string | undefined,
@@ -35,9 +38,11 @@ export async function bearerRefusal(
   if (!match) return 'Bearer token required';
   const token = match[1];
   try {
-    const ok = isAgentToken(token)
-      ? await checks.isLiveAgentToken(token)
-      : await checks.isValidJwt(token);
+    const ok = isPersonalToken(token)
+      ? await checks.isLivePersonalToken(token)
+      : isAgentToken(token)
+        ? await checks.isLiveAgentToken(token)
+        : await checks.isValidJwt(token);
     return ok ? null : 'Invalid or revoked token';
   } catch {
     return 'Invalid or revoked token';
@@ -79,6 +84,7 @@ export class McpBodyLimit {
     adapterHost: HttpAdapterHost,
     private readonly agentService: AgentService,
     private readonly tokenService: TokenService,
+    private readonly personalTokenService: PersonalTokenService,
   ) {
     const fastify = adapterHost?.httpAdapter?.getInstance?.();
     if (!fastify?.addHook) {
@@ -87,6 +93,8 @@ export class McpBodyLimit {
     }
     const checks: BearerChecks = {
       isLiveAgentToken: (token) => this.agentService.isLiveToken(token),
+      isLivePersonalToken: (token) =>
+        this.personalTokenService.isLiveToken(token),
       isValidJwt: async (token) => {
         await this.tokenService.verifyJwt(token, JwtType.ACCESS);
         return true;

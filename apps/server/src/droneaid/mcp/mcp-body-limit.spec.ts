@@ -5,10 +5,12 @@ import { bearerRefusal, McpBodyLimit, MCP_ROUTE_PATH } from './mcp-body-limit';
 import { MCP_RATE_LIMIT, McpThrottlerGuard } from './mcp-throttler.guard';
 
 const AGENT = `dmcp_${'a'.repeat(43)}`;
+const PERSONAL = `dmcpu_${'p'.repeat(43)}`;
 
 describe('bearerRefusal', () => {
   const checks = {
     isLiveAgentToken: jest.fn(async (t: string) => t === AGENT),
+    isLivePersonalToken: jest.fn(async (t: string) => t === PERSONAL),
     isValidJwt: jest.fn(async (t: string) => {
       if (t !== 'good.jwt.sig') throw new Error('bad signature');
       return true;
@@ -24,6 +26,19 @@ describe('bearerRefusal', () => {
   it('refuses unknown agent tokens and bad JWTs', async () => {
     expect(await bearerRefusal(`Bearer dmcp_${'b'.repeat(43)}`, checks)).toMatch(/Invalid/);
     expect(await bearerRefusal('Bearer forged.jwt.sig', checks)).toMatch(/Invalid/);
+  });
+
+  it('checks personal tokens against their own table only', async () => {
+    expect(await bearerRefusal(`Bearer ${PERSONAL}`, checks)).toBeNull();
+    expect(
+      await bearerRefusal(`Bearer dmcpu_${'q'.repeat(43)}`, checks),
+    ).toMatch(/Invalid/);
+    expect(checks.isLiveAgentToken).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^dmcpu_/),
+    );
+    expect(checks.isValidJwt).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^dmcpu_/),
+    );
   });
 
   it('lets live agent tokens and valid JWTs through', async () => {
@@ -47,6 +62,7 @@ describe('McpBodyLimit on a Fastify instance', () => {
           throw new Error('nope');
         },
       } as any,
+      { isLiveToken: async (t: string) => t === PERSONAL } as any,
     );
     const seen: any[] = [];
     fastify.post(MCP_ROUTE_PATH, async (req: any) => {

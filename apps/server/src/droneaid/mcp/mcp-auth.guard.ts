@@ -15,13 +15,19 @@ import { JwtType } from '../../core/auth/dto/jwt-payload';
 import { extractBearerTokenFromHeader } from '../../common/helpers';
 import { AgentService } from '../agents/agent.service';
 import { isAgentToken } from '../agents/agent-token.util';
+import { PersonalTokenService } from '../personal-tokens/personal-token.service';
+import { isPersonalToken } from '../personal-tokens/personal-token.util';
 
 export const AGENT_AUTH_TYPE = 'droneaid_agent';
+export const PERSONAL_TOKEN_AUTH_TYPE = 'droneaid_personal_token';
 
 export type McpPrincipal = {
   user: User;
   workspace: Workspace;
-  authType: typeof AGENT_AUTH_TYPE | JwtType.ACCESS;
+  authType:
+    | typeof AGENT_AUTH_TYPE
+    | typeof PERSONAL_TOKEN_AUTH_TYPE
+    | JwtType.ACCESS;
   isAgent: boolean;
   /** The agent's own space (writer), when the caller is an agent. */
   agentSpaceId?: string | null;
@@ -31,8 +37,10 @@ export type McpPrincipal = {
 
 /**
  * Authenticates the MCP route, and only that route. Accepts
- * `Authorization: Bearer <token>` where the token is either
- *  - an agent token (`dmcp_...`, checked against droneaid_agent_tokens), or
+ * `Authorization: Bearer <token>` where the token is one of
+ *  - an agent token (`dmcp_...`, checked against droneaid_agent_tokens),
+ *  - a member's personal token (`dmcpu_...`, droneaid_user_mcp_tokens): the
+ *    caller acts as that member, exactly like with a session JWT, or
  *  - a human session JWT (`type: access`), validated by core's own
  *    JwtStrategy (workspace match, disabled user, active session).
  * The `authToken` cookie is ignored on purpose: MCP clients send a header,
@@ -47,6 +55,7 @@ export class McpAuthGuard implements CanActivate {
     private readonly tokenService: TokenService,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly moduleRef: ModuleRef,
+    private readonly personalTokenService: PersonalTokenService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -54,9 +63,11 @@ export class McpAuthGuard implements CanActivate {
     const token = extractBearerTokenFromHeader(req);
     if (!token) throw new UnauthorizedException('Bearer token required');
 
-    const principal = isAgentToken(token)
-      ? await this.authenticateAgent(token, req)
-      : await this.authenticateHuman(token, req);
+    const principal = isPersonalToken(token)
+      ? await this.authenticatePersonal(token, req)
+      : isAgentToken(token)
+        ? await this.authenticateAgent(token, req)
+        : await this.authenticateHuman(token, req);
 
     req.user = principal;
     return true;
@@ -88,6 +99,33 @@ export class McpAuthGuard implements CanActivate {
       isAgent: true,
       agentSpaceId: result.agent.spaceId,
       skipPermissionCache: healed,
+    };
+  }
+
+  /**
+   * A member's personal token. PersonalTokenService.authenticate re-checks
+   * the token, that the user is still an active member of the token's
+   * workspace and that it is not an agent account; here, as for agents, the
+   * workspace must also be the one the request's host resolves to.
+   */
+  private async authenticatePersonal(
+    token: string,
+    req: any,
+  ): Promise<McpPrincipal> {
+    const result = await this.personalTokenService.authenticate(token);
+    if (!result) throw new UnauthorizedException('Invalid or revoked token');
+
+    if (req.raw?.workspaceId && req.raw.workspaceId !== result.workspaceId) {
+      throw new UnauthorizedException('Workspace does not match');
+    }
+    const workspace = await this.workspaceRepo.findById(result.workspaceId);
+    if (!workspace) throw new UnauthorizedException();
+
+    return {
+      user: result.user,
+      workspace,
+      authType: PERSONAL_TOKEN_AUTH_TYPE,
+      isAgent: false,
     };
   }
 
