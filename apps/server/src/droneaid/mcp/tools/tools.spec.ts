@@ -5,7 +5,7 @@ import {
   readDocumentTool,
 } from './documents';
 import { anyWordQuery, docSearchTool, plainExcerpt } from './search';
-import { buildTree, listFoldersTool } from './folders';
+import { buildTree, listFoldersTool, MAX_TREE_PAGES } from './folders';
 import { toolsForCaller } from './define';
 import { ALL_TOOLS } from './index';
 import {
@@ -81,12 +81,16 @@ function fakeDb() {
   return {
     selectFrom: () => {
       let rows = [...PAGES];
+      let counting = false;
+      let skip = 0;
+      let take = Infinity;
       const qb: any = {
         where: (col: string, op: string, val: any) => {
           rows = rows.filter((r: any) => {
             const v = typeof col === 'string' ? r[col] : undefined;
             if (op === '=') return v === val;
             if (op === 'in') return val.includes(v);
+            if (op === 'not in') return !val.includes(v);
             if (op === 'is') return v === val;
             if (op === 'ilike')
               return String(v)
@@ -97,16 +101,23 @@ function fakeDb() {
           return qb;
         },
         $if: (cond: boolean, fn: any) => (cond ? fn(qb) : qb),
-        select: () => qb,
+        select: (arg: any) => {
+          if (typeof arg === 'function') counting = true;
+          return qb;
+        },
         orderBy: () => qb,
-        execute: async () => rows,
+        limit: (n: number) => ((take = n), qb),
+        offset: (n: number) => ((skip = n), qb),
+        execute: async () => rows.slice(skip, skip + take),
+        executeTakeFirst: async () =>
+          counting ? { count: String(rows.length) } : rows[0],
       };
       return qb;
     },
   };
 }
 
-function makeCtx(opts: { isAgent?: boolean } = {}) {
+function makeCtx(opts: { isAgent?: boolean; restricted?: string[] } = {}) {
   const spaceAbility = {
     createForUser: jest.fn(async (_u: any, spaceId: string) => {
       const role = ROLES[spaceId];
@@ -153,7 +164,14 @@ function makeCtx(opts: { isAgent?: boolean } = {}) {
       }),
     },
     pagePermissionRepo: {
-      filterAccessiblePageIds: jest.fn(async ({ pageIds }: any) => pageIds),
+      filterAccessiblePageIds: jest.fn(async ({ pageIds }: any) =>
+        pageIds.filter((id: string) => !(opts.restricted ?? []).includes(id)),
+      ),
+      hasRestrictedPagesInSpace: jest.fn(async (spaceId: string) =>
+        PAGES.some(
+          (p) => p.spaceId === spaceId && (opts.restricted ?? []).includes(p.id),
+        ),
+      ),
     },
     pageService: {
       getPageBreadCrumbs: jest.fn(async (id: string) =>
@@ -358,6 +376,29 @@ describe('list_documents', () => {
     expect(paged.documents).toHaveLength(1);
   });
 
+  it('pages with correct totals when restricted pages are present', async () => {
+    const { ctx, deps } = makeCtx({ restricted: ['p-child'] });
+    const first = json(
+      await listDocumentsTool.execute({ limit: 1, offset: 0 }, ctx),
+    );
+    const second = json(
+      await listDocumentsTool.execute({ limit: 1, offset: 1 }, ctx),
+    );
+    const beyond = json(
+      await listDocumentsTool.execute({ limit: 1, offset: 2 }, ctx),
+    );
+    expect([first.total, second.total, beyond.total]).toEqual([2, 2, 2]);
+    expect([...first.documents, ...second.documents].map((d: any) => d.id).sort()).toEqual([
+      'p-agent',
+      'p-root',
+    ]);
+    expect(beyond.documents).toEqual([]);
+    // Only the space with restricted pages is filtered page by page.
+    for (const call of deps.pagePermissionRepo.filterAccessiblePageIds.mock.calls) {
+      expect(call[0].spaceId).toBe('sp-shared');
+    }
+  });
+
   it('refuses an unshared space and a parent in it', async () => {
     const { ctx } = makeCtx();
     expect(
@@ -487,6 +528,29 @@ describe('doc_search', () => {
 });
 
 describe('list_folders', () => {
+  it('truncates per space, so a huge space does not hide the others', async () => {
+    const extra = Array.from({ length: MAX_TREE_PAGES + 5 }, (_, i) => ({
+      ...PAGES[0],
+      id: `p-bulk-${i}`,
+      slugId: `bulk${i}`,
+      title: `Bulk ${i}`,
+    }));
+    PAGES.unshift(...extra);
+    try {
+      const { ctx } = makeCtx();
+      const out = json(await listFoldersTool.execute({}, ctx));
+      const shared = out.spaces.find((s: any) => s.slug === 'shared');
+      const agent = out.spaces.find((s: any) => s.slug === 'agent');
+      expect(shared.truncated).toBe(true);
+      expect(shared.folders).toHaveLength(MAX_TREE_PAGES);
+      expect(agent.truncated).toBeUndefined();
+      expect(agent.folders.map((f: any) => f.folder_id)).toEqual(['p-agent']);
+      expect(out.truncated).toBe(true);
+    } finally {
+      PAGES.splice(0, extra.length);
+    }
+  });
+
   it('returns each readable space as a tree of pages with folder ids and can_write', async () => {
     const { ctx } = makeCtx();
     const out = json(await listFoldersTool.execute({}, ctx));

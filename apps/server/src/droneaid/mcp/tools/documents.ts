@@ -202,41 +202,60 @@ async function queryPages(
   },
 ): Promise<{ total: number; rows: PageRow[] }> {
   if (opts.spaceIds.length === 0) return { total: 0, rows: [] };
-  const base = ctx.deps.db
-    .selectFrom('pages')
-    .where('workspaceId', '=', ctx.workspace.id)
-    .where('spaceId', 'in', opts.spaceIds)
-    .where('deletedAt', 'is', null)
-    .$if(opts.parentId === null, (qb) => qb.where('parentPageId', 'is', null))
-    .$if(!!opts.parentId, (qb) => qb.where('parentPageId', '=', opts.parentId))
-    .$if(!!opts.titleContains, (qb) =>
-      qb.where('title', 'ilike', `%${escapeLike(opts.titleContains)}%`),
+  const filtered = (spaceIds: string[]) =>
+    ctx.deps.db
+      .selectFrom('pages')
+      .where('workspaceId', '=', ctx.workspace.id)
+      .where('spaceId', 'in', spaceIds)
+      .where('deletedAt', 'is', null)
+      .$if(opts.parentId === null, (qb) => qb.where('parentPageId', 'is', null))
+      .$if(!!opts.parentId, (qb) =>
+        qb.where('parentPageId', '=', opts.parentId),
+      )
+      .$if(!!opts.titleContains, (qb) =>
+        qb.where('title', 'ilike', `%${escapeLike(opts.titleContains)}%`),
+      );
+
+  // Pages hidden by page-level restrictions, per space; only spaces that
+  // have restricted pages load their candidate ids. Excluding them in SQL
+  // keeps total and paging equal to what the caller can open.
+  const hidden = (
+    await Promise.all(
+      opts.spaceIds.map((spaceId) =>
+        ctx.hiddenPageIds(spaceId, async () =>
+          (await filtered([spaceId]).select('id').execute()).map(
+            (row) => row.id,
+          ),
+        ),
+      ),
+    )
+  ).flat();
+  const visible = () =>
+    filtered(opts.spaceIds).$if(hidden.length > 0, (qb) =>
+      qb.where('id', 'not in', hidden),
     );
 
-  const candidates = await base
-    .select([
-      'id',
-      'slugId',
-      'title',
-      'spaceId',
-      'parentPageId',
-      'createdAt',
-      'updatedAt',
-    ])
-    .orderBy('updatedAt', 'desc')
-    .orderBy('id', 'asc')
-    .execute();
-
-  // Page-level restrictions are applied to the whole candidate set so that
-  // total and paging agree with what the caller can actually open.
-  const visible = new Set(
-    await ctx.filterAccessiblePageIds(candidates.map((row) => row.id)),
-  );
-  const rows = candidates.filter((row) => visible.has(row.id));
-  return {
-    total: rows.length,
-    rows: rows.slice(opts.offset, opts.offset + opts.limit),
-  };
+  const [count, rows] = await Promise.all([
+    visible()
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirst(),
+    visible()
+      .select([
+        'id',
+        'slugId',
+        'title',
+        'spaceId',
+        'parentPageId',
+        'createdAt',
+        'updatedAt',
+      ])
+      .orderBy('updatedAt', 'desc')
+      .orderBy('id', 'asc')
+      .limit(opts.limit)
+      .offset(opts.offset)
+      .execute(),
+  ]);
+  return { total: Number(count?.count ?? 0), rows };
 }
 
 function escapeLike(value: string): string {

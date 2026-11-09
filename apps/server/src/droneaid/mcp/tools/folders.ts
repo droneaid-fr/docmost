@@ -5,7 +5,7 @@ import { defineTool, toolError, toolJson } from './define';
 import { scopeSpaces } from './documents';
 import { spaceUrl } from './page-url';
 
-/** Upper bound on pages returned per call, so one huge space cannot flood the reply. */
+/** Upper bound on pages returned per space, so one huge space cannot flood the reply. */
 export const MAX_TREE_PAGES = 2000;
 
 type TreeRow = {
@@ -51,57 +51,57 @@ export const listFoldersTool = defineTool({
     const spaces = await scopeSpaces(ctx, space_id);
     if (!spaces) return toolError(`Space ${space_id} not found.`);
 
-    const rows = await loadTreeRows(ctx, spaces);
-    const truncated = rows.length > MAX_TREE_PAGES;
-    const kept = truncated ? rows.slice(0, MAX_TREE_PAGES) : rows;
+    const trees = await Promise.all(
+      spaces.map((space) => loadTreeRows(ctx, space)),
+    );
+    const truncated = trees.some((tree) => tree.truncated);
 
     return toolJson({
-      spaces: spaces.map((space) => ({
+      spaces: spaces.map((space, i) => ({
         space_id: space.id,
         name: space.name,
         slug: space.slug,
         url: spaceUrl(ctx.baseUrl, space.slug),
         can_write: space.canWrite,
-        folders: buildTree(
-          ctx,
-          space,
-          kept.filter((row) => row.spaceId === space.id),
-          max_depth,
-        ),
+        ...(trees[i].truncated ? { truncated: true } : {}),
+        folders: buildTree(ctx, space, trees[i].rows, max_depth),
       })),
       ...(truncated
         ? {
             truncated: true,
-            note: `Only the first ${MAX_TREE_PAGES} pages are shown; pass space_id or max_depth.`,
+            note: `Only the first ${MAX_TREE_PAGES} pages of a space are shown (see each space's truncated flag); pass space_id or max_depth.`,
           }
         : {}),
     });
   },
 });
 
+/** One space's pages in sidebar order, at most MAX_TREE_PAGES of them. */
 async function loadTreeRows(
   ctx: McpToolContext,
-  spaces: ReadableSpace[],
-): Promise<TreeRow[]> {
-  if (spaces.length === 0) return [];
+  space: ReadableSpace,
+): Promise<{ rows: TreeRow[]; truncated: boolean }> {
   const rows = await ctx.deps.db
     .selectFrom('pages')
     .select(['id', 'slugId', 'title', 'parentPageId', 'spaceId'])
     .where('workspaceId', '=', ctx.workspace.id)
-    .where(
-      'spaceId',
-      'in',
-      spaces.map((s) => s.id),
-    )
+    .where('spaceId', '=', space.id)
     .where('deletedAt', 'is', null)
     // Same order as the sidebar (PageService.getSidebarPages).
     .orderBy(sql`position collate "C"`, 'asc')
     .orderBy('id', 'asc')
+    .limit(MAX_TREE_PAGES + 1)
     .execute();
+  const truncated = rows.length > MAX_TREE_PAGES;
+  const kept = truncated ? rows.slice(0, MAX_TREE_PAGES) : rows;
+  // With spaceId, core skips the ancestor walk in unrestricted spaces.
   const visible = new Set(
-    await ctx.filterAccessiblePageIds(rows.map((row) => row.id)),
+    await ctx.filterAccessiblePageIds(
+      kept.map((row) => row.id),
+      space.id,
+    ),
   );
-  return rows.filter((row) => visible.has(row.id));
+  return { rows: kept.filter((row) => visible.has(row.id)), truncated };
 }
 
 export function buildTree(

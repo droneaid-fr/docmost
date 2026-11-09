@@ -109,25 +109,32 @@ export class McpToolContext {
 
   private async loadReadableSpaces(): Promise<ReadableSpace[]> {
     const ids = await this.deps.spaceMemberRepo.getUserSpaceIds(this.user.id);
-    const result: ReadableSpace[] = [];
-    for (const id of [...new Set(ids)]) {
-      const space = await this.findLiveSpace(id);
-      if (!space) continue;
-      const ability = await this.abilityFor(id);
-      if (
-        !ability ||
-        ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)
-      ) {
-        continue;
-      }
-      result.push({
-        id: space.id,
-        name: space.name,
-        slug: space.slug,
-        canWrite: ability.can(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
-      });
-    }
-    return result.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    // One concurrent round of lookups (space rows, cached space roles)
+    // instead of two sequential queries per space.
+    const found = await Promise.all(
+      [...new Set(ids)].map(async (id) => {
+        const [space, ability] = await Promise.all([
+          this.findLiveSpace(id),
+          this.abilityFor(id),
+        ]);
+        if (
+          !space ||
+          !ability ||
+          ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)
+        ) {
+          return null;
+        }
+        return {
+          id: space.id,
+          name: space.name,
+          slug: space.slug,
+          canWrite: ability.can(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
+        };
+      }),
+    );
+    return found
+      .filter((space): space is ReadableSpace => !!space)
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }
 
   /** By id or slug, else by name (case-insensitive) when that is unique. */
@@ -197,6 +204,24 @@ export class McpToolContext {
       userId: this.user.id,
       spaceId,
     });
+  }
+
+  /**
+   * Ids among a space's pages the caller may not view (page-level
+   * restrictions). Spaces without restricted pages cost one cheap query and
+   * `loadIds` is not even called; that is core's own fast path
+   * (hasRestrictedPagesInSpace, as filterAccessiblePageIds uses with spaceId).
+   */
+  async hiddenPageIds(
+    spaceId: string,
+    loadIds: () => Promise<string[]>,
+  ): Promise<string[]> {
+    const restricted =
+      await this.deps.pagePermissionRepo.hasRestrictedPagesInSpace(spaceId);
+    if (!restricted) return [];
+    const ids = await loadIds();
+    const visible = new Set(await this.filterAccessiblePageIds(ids, spaceId));
+    return ids.filter((id) => !visible.has(id));
   }
 
   pageUrl(page: PageRef, spaceSlug: string): string {
