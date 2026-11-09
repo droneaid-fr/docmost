@@ -141,19 +141,117 @@ and derives a variant in which only the `builder` stage runs natively
 JavaScript. The installer stage still installs native modules (bcrypt, ...) for arm64 under
 qemu, and the runtime is arm64. In CI, a native arm64 runner can use the plain `Dockerfile`.
 
-## Local stack
+## Local verification stack
 
-`droneaid/local/compose.yml` runs our image with Postgres 18 and Redis 8. It uses the
-integration (S7) ports: app 3000, Postgres 5540, Redis 6390, all bound to 127.0.0.1.
+`droneaid/local/compose.yml` runs our image with the migrated AFFiNE data, for manual checks
+before deployment. It uses the integration (S7) ports, all bound to 127.0.0.1.
+
+| Service | Address | Purpose |
+|---|---|---|
+| `docmost` | http://localhost:3000 | our image `docmost-droneaid:local` (`DOCMOST_IMAGE` picks another tag) |
+| `db` | localhost:5540 | Postgres 18 |
+| `redis` | localhost:6390 | Redis 8 |
+| `mailpit` | http://localhost:8025 | catches every mail the app sends (password reset, invitations) |
+| `fake-gemini` | (internal) | stand-in for Gemini: appends ` [fake-<lang>]` to each block instead of translating |
+
+Secrets live in `droneaid/local/.env` (untracked, mode 600; template `.env.example`):
+`APP_SECRET`, `POSTGRES_PASSWORD`, `DOCMOST_AGENT_TOKEN` and `LOCAL_FILIPP_PASSWORD`.
+
+### Start, stop, status
+
+```bash
+docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .   # after code changes
+cd droneaid/local
+docker compose up -d          # start (restart policy unless-stopped: it comes back after a reboot)
+docker compose ps
+curl -s localhost:3000/api/health
+docker compose stop           # stop, keep data
+docker compose up -d docmost  # pick up a rebuilt image
+```
+
+### Sign in
+
+Open http://localhost:3000 and sign in with email `filipp@droneaid.fr` and the password
+stored as `LOCAL_FILIPP_PASSWORD` in `droneaid/local/.env`:
+
+```bash
+grep ^LOCAL_FILIPP_PASSWORD= droneaid/local/.env
+```
+
+Imported users have no usable password (production signs them in with Google). To set or
+change the password of any imported user, use Docmost's own reset: on the login page click
+**Forgot your password?**, enter the email, open the mail in mailpit (http://localhost:8025),
+follow the link and choose a password. If you change filipp's password, update
+`LOCAL_FILIPP_PASSWORD` too.
+
+### What is imported
+
+The S6 bundle `base/backups/migration-bundle-20261109T093335Z/`, imported as
+`droneaid/migration/RUNBOOK.md` step 3 prescribes for production: the importer runs inside
+the app container against the empty database, then `--verify`. Reports:
+`base/backups/import-docmost-s7-local-20261109/` (`verify.md`: PASS).
+
+- 4 spaces (DroneAid France, DroneAid Academy, DroneAid R&D, Demo Workspace), plus Docmost's
+  own empty General.
+- 15 human users and the DroneAid France agent.
+- 56 live doc pages, 13 folder pages and 36 trashed docs (in the Docmost trash).
+- 97 files.
+- 10 databases, every cell equal to the bundle (Target List 777×8; Guests in
+  *Participant list*, 201×23).
+- 6 public shares, 3 translations, 2 comments, 4 signup rules and 30 internal links.
+
+Demo Workspace has one member, `mark.p@drone-aid.nl`, as in AFFiNE. Docmost lists a private
+space only to its members, even for the workspace owner, so filipp does not see it.
+
+### Agent token and test agent
+
+`DOCMOST_AGENT_TOKEN` in `droneaid/local/.env` is a token of *DroneAid France agent*, minted
+in **Settings → Agents**. The test Hermes profile `~/.hermes/profiles/da-france-docmost-test`
+(S3c's copy, never the live `da-france-agent`; no WhatsApp, Resend, Luma or Google Drive)
+points at `http://localhost:3000/api/droneaid/mcp` with that token, for both its `docmost`
+MCP server and its `pdf-import` copy (`MCP_DOCMOST_TOKEN` in the profile's `.env`).
+
+```bash
+hermes -p da-france-docmost-test -z "Search for 'Target List' and tell me how many rows its database has."
+```
+
+After minting a new token, put it in both `.env` files and revoke the old one in
+Settings → Agents.
+
+### Differences from production
+
+- **No Google sign-in.** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are unset, so the
+  login page has no Google button: the localhost callback is not registered on the real
+  OAuth client. Users sign in with a password set through mailpit.
+- **No real translation.** `TRANSLATE_GEMINI_BASE_URL` points at `fake-gemini`, which only
+  tags text. The 3 imported translations are real (made by AFFiNE's Gemini) and are served
+  until their page is edited. For real translations, set `GEMINI_API_KEY` to a real key,
+  delete `TRANSLATE_GEMINI_BASE_URL` from `.env` and run `docker compose up -d docmost`.
+- **Mail never leaves the machine** (mailpit instead of Resend SMTP).
+- **No Caddy**, so old AFFiNE URLs do not redirect here. The snippet in the import reports
+  was checked separately with a local `caddy:2` in front of this stack.
+- amd64 image; production runs the arm64 build of the same commit.
+
+### Reset and re-import
+
+This deletes every page, user and file of the local stack.
 
 ```bash
 cd droneaid/local
-cp .env.example .env    # fill APP_SECRET and POSTGRES_PASSWORD; .env is git-ignored
-docker compose up -d    # set DOCMOST_IMAGE=... to run another tag
-curl -s localhost:3000/api/health
+docker compose down -v && docker compose up -d     # empty DB; the app runs migrations on boot
+until curl -sf localhost:3000/api/health >/dev/null; do sleep 2; done
+B=../../../backups/migration-bundle-20261109T093335Z
+docker compose cp "$B" docmost:/tmp/bundle
+docker compose exec -w /app/apps/server docmost \
+  node dist/droneaid/migration/import-cli.js --bundle /tmp/bundle --out /tmp/import --verify
+docker compose cp docmost:/tmp/import ../../../backups/import-docmost-local-$(date +%Y%m%d%H%M)
+docker compose exec docmost rm -rf /tmp/bundle /tmp/import
 ```
 
-Then open `http://localhost:3000` and complete setup.
+Then set filipp's password again (Forgot password + mailpit), mint a new agent token, and put
+it in both `.env` files (`DOCMOST_AGENT_TOKEN` here, `MCP_DOCMOST_TOKEN` in the test profile).
+
+The manual verification checklist is [`VERIFY.md`](VERIFY.md).
 
 ## Google sign-in (`apps/server/src/droneaid/google-auth`)
 

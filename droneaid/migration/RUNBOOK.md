@@ -10,6 +10,8 @@ machine, `/opt/docmost` the stack on the VM.
 
 Expected timings (dry run 2026-11-09, 92 docs / 184 blobs): export ~1 s,
 import ~5 s, verify ~1 s. Plan a 30-minute freeze for the whole sequence.
+Step 3 was rehearsed in S7 (2026-11-09) with the image, inside the app
+container of `droneaid/local/compose.yml`: import 5 s, `--verify` PASS.
 
 ## 0. Before the day
 
