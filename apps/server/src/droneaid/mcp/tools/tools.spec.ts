@@ -208,7 +208,9 @@ const json = (r: any) => JSON.parse(r.content[0].text);
 describe('tool registry', () => {
   it('declares access and audience on every tool; S3a tools are read-only and agent-callable', () => {
     expect(ALL_TOOLS.map((t) => t.name).sort()).toEqual([
+      'add_database_rows',
       'add_to_folder',
+      'create_database',
       'create_document',
       'create_folder',
       'doc_search',
@@ -216,9 +218,13 @@ describe('tool registry', () => {
       'list_documents',
       'list_folders',
       'move_folder_item',
+      'read_database',
       'read_document',
+      'remove_database_rows',
       'remove_from_folder',
       'rename_folder',
+      'update_database_columns',
+      'update_database_rows',
       'update_document',
       'update_document_meta',
       'upload_image',
@@ -228,6 +234,7 @@ describe('tool registry', () => {
       'get_document_info',
       'list_documents',
       'list_folders',
+      'read_database',
       'read_document',
     ]);
     for (const tool of ALL_TOOLS) {
@@ -485,7 +492,17 @@ describe('markdown helpers', () => {
     expect(restoreDatabaseMarkers(`before\n\n${text}\n`)).toBe(
       'before\n\n<!-- database id=db_1 -->\n',
     );
-    expect(replaceDatabaseNodes(doc)).toBe(doc); // no database types registered yet
+    // The registered type is the S4a block; other node types are left alone.
+    expect(replaceDatabaseNodes(doc).content[1]).toEqual(doc.content[1]);
+    expect(
+      replaceDatabaseNodes({
+        type: 'doc',
+        content: [{ type: 'droneaidDatabase', attrs: { id: 'db_2' } }],
+      }).content[0].content[0].text,
+    ).toMatch(/:db_2$/);
+    expect(
+      restoreDatabaseMarkers(text, new Map([['db_1', '<!-- database id=db_1 "T" -->']])),
+    ).toBe('<!-- database id=db_1 "T" -->');
   });
 
   it('absolutizes root-relative page links only', () => {

@@ -64,6 +64,15 @@ describe('markersToTokens', () => {
     expect(out).toContain(`${KEEP_TOKEN}:database:abc_1`);
     expect(out).toContain('<!-- database id=nope -->');
   });
+
+  it('accepts the long marker read_document writes', () => {
+    const out = markersToTokens(
+      'a\n<!-- database id=abc "Guests" (12 rows, 5 columns): read it with read_database. -->\nb',
+    );
+    expect(out).toContain(`${KEEP_TOKEN}:database:abc\n`);
+    expect(out).not.toContain('<!--');
+    expect(markersToTokens('<!-- database id=abc-->x -->')).not.toContain(KEEP_TOKEN);
+  });
 });
 
 describe('normalizeUrl', () => {
