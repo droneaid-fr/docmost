@@ -1,0 +1,208 @@
+diff --git a/affine.py b/affine.py
+index 4c899ec..695b710 100644
+--- a/affine.py
++++ b/affine.py
+@@ -20,8 +20,10 @@ class AffineError(RuntimeError):
+ 
+ 
+ class AffineClient:
+-    def __init__(self, session: ClientSession):
++    def __init__(self, session: ClientSession, mcp_url: str = ""):
+         self._session = session
++        self._mcp_url = mcp_url
++        self._urls: dict[str, str] = {}
+ 
+     async def _call_text(self, tool: str, arguments: dict[str, Any]) -> str:
+         result = await self._session.call_tool(tool, arguments)
+@@ -53,7 +55,25 @@ class AffineClient:
+         if folder_id:
+             arguments["folder_id"] = folder_id
+         reply = await self._call("create_document", arguments)
+-        return reply["docId"]
++        doc_id = reply["docId"]
++        if reply.get("url"):
++            self._urls[doc_id] = reply["url"]
++        return doc_id
++
++    async def doc_url(self, doc_id: str) -> str | None:
++        """The doc's web URL, as the server reports it.
++
++        Docmost returns `url` from create_document and get_document_info;
++        AFFiNE returns neither, so its URL is built from the MCP endpoint.
++        """
++        if doc_id in self._urls:
++            return self._urls[doc_id]
++        try:
++            info = await self._call("get_document_info", {"docId": doc_id})
++        except AffineError:
++            info = {}
++        url = info.get("url") if isinstance(info, dict) else None
++        return url or doc_link(self._mcp_url, doc_id)
+ 
+     async def read_document(self, doc_id: str) -> str:
+         """The doc body as markdown (read_document replies with text, not JSON)."""
+@@ -77,12 +97,17 @@ async def connect(url: str, token: str):
+     async with streamablehttp_client(url, headers=headers) as (read, write, _):
+         async with ClientSession(read, write) as session:
+             await session.initialize()
+-            yield AffineClient(session)
++            yield AffineClient(session, url)
++
+ 
++def doc_link(mcp_url: str, doc_id: str) -> str | None:
++    """AFFiNE only: `https://host/api/workspaces/<ws>/mcp` -> `https://host/workspace/<ws>/<doc>`.
+ 
+-def doc_link(mcp_url: str, doc_id: str) -> str:
+-    """`https://host/api/workspaces/<ws>/mcp` -> `https://host/workspace/<ws>/<doc>`."""
++    None for any other endpoint shape (Docmost reports its URLs itself).
++    """
+     parts = urlsplit(mcp_url)
+     segments = [s for s in parts.path.split("/") if s]
++    if "workspaces" not in segments[:-1]:
++        return None
+     workspace_id = segments[segments.index("workspaces") + 1]
+     return f"{parts.scheme}://{parts.netloc}/workspace/{workspace_id}/{doc_id}"
+diff --git a/server.py b/server.py
+index 61b3357..8ec9a37 100644
+--- a/server.py
++++ b/server.py
+@@ -112,9 +112,10 @@ async def _publish(converted, title: str, folder_id: str | None) -> dict:
+             doc_id = await client.create_document(title, markdown, folder_id)
+         except affine.AffineError as error:
+             return {"error": str(error)}
++        link = await client.doc_url(doc_id)
+     return {
+         "docId": doc_id,
+-        "link": affine.doc_link(AFFINE_URL, doc_id),
++        "link": link,
+         "figures": embedded,
+         "warnings": warnings,
+     }
+@@ -237,7 +238,8 @@ async def _write_table(
+                 doc_id = await client.create_document(title, table, folder_id)
+         except affine.AffineError as error:
+             return {"error": str(error)}
+-    return {"docId": doc_id, "link": affine.doc_link(AFFINE_URL, doc_id)}
++        link = await client.doc_url(doc_id)
++    return {"docId": doc_id, "link": link}
+ 
+ 
+ # AFFiNE's create_database limits (plugins/mcp/tools/databases.ts), checked
+@@ -278,13 +280,14 @@ async def _write_database(
+         except affine.AffineError as error:
+             if not created:
+                 return {"error": str(error)}
+-            link = affine.doc_link(AFFINE_URL, doc_id)
++            link = await client.doc_url(doc_id)
+             return {
+                 "error": f"{error}. The new doc was created but is empty: {link}",
+                 "docId": doc_id,
+                 "link": link,
+             }
+-    return {"docId": doc_id, "link": affine.doc_link(AFFINE_URL, doc_id)}
++        link = await client.doc_url(doc_id)
++    return {"docId": doc_id, "link": link}
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/tests/test_doc_url.py b/tests/test_doc_url.py
+new file mode 100644
+index 0000000..a6f6d29
+--- /dev/null
++++ b/tests/test_doc_url.py
+@@ -0,0 +1,67 @@
++"""AffineClient.doc_url: the link import_pdf / import_csv hand back to the agent.
++
++Docmost reports `url` from create_document and get_document_info; AFFiNE
++reports neither, so its link is still built from the MCP endpoint.
++"""
++
++import json
++from types import SimpleNamespace
++
++import affine
++
++DOCMOST = "http://localhost:3300/api/droneaid/mcp"
++AFFINE = "https://base.example/api/workspaces/ws-1/mcp"
++
++
++class FakeSession:
++    def __init__(self, replies: dict):
++        self.replies = replies
++        self.calls: list[str] = []
++
++    async def call_tool(self, tool, arguments):
++        self.calls.append(tool)
++        reply = self.replies.get(tool)
++        if reply is None:
++            return SimpleNamespace(
++                content=[SimpleNamespace(type="text", text="Doc not found")],
++                isError=True,
++            )
++        return SimpleNamespace(
++            content=[SimpleNamespace(type="text", text=json.dumps(reply))],
++            isError=False,
++        )
++
++
++async def test_docmost_create_reply_url_is_used_without_another_call():
++    url = "http://localhost:3300/s/da-france/p/report-abc123"
++    session = FakeSession({"create_document": {"docId": "p1", "url": url}})
++    client = affine.AffineClient(session, DOCMOST)
++    doc_id = await client.create_document("Report", "x", None)
++    assert doc_id == "p1"
++    assert await client.doc_url(doc_id) == url
++    assert session.calls == ["create_document"]
++
++
++async def test_docmost_existing_doc_url_comes_from_get_document_info():
++    url = "http://localhost:3300/s/da-france/p/guests-xyz"
++    session = FakeSession({"get_document_info": {"id": "p2", "url": url}})
++    client = affine.AffineClient(session, DOCMOST)
++    assert await client.doc_url("p2") == url
++
++
++async def test_affine_falls_back_to_the_workspace_link():
++    session = FakeSession(
++        {"create_document": {"docId": "d1"}, "get_document_info": {"id": "d1"}}
++    )
++    client = affine.AffineClient(session, AFFINE)
++    doc_id = await client.create_document("T", "x", None)
++    assert await client.doc_url(doc_id) == "https://base.example/workspace/ws-1/d1"
++
++
++async def test_unknown_doc_on_docmost_has_no_link():
++    client = affine.AffineClient(FakeSession({}), DOCMOST)
++    assert await client.doc_url("missing") is None
++
++
++def test_doc_link_is_affine_only():
++    assert affine.doc_link(DOCMOST, "p1") is None
+diff --git a/tests/test_import.py b/tests/test_import.py
+index e27793f..61f2d0b 100644
+--- a/tests/test_import.py
++++ b/tests/test_import.py
+@@ -36,6 +36,9 @@ class FakeAffine:
+             raise affine.AffineError("create_document failed: Folder not found")
+         return "doc1"
+ 
++    async def doc_url(self, doc_id):
++        return affine.doc_link(os.environ["AFFINE_MCP_URL"], doc_id)
++
+ 
+ def fake_connect(client):
+     """Like the real client: the session body runs inside an anyio task group."""
+diff --git a/tests/test_import_csv.py b/tests/test_import_csv.py
+index b6409ee..d76cce7 100644
+--- a/tests/test_import_csv.py
++++ b/tests/test_import_csv.py
+@@ -33,6 +33,9 @@ class FakeAffine:
+         self.created.append((title, markdown, folder_id))
+         return "new-doc"
+ 
++    async def doc_url(self, doc_id):
++        return affine.doc_link(os.environ["AFFINE_MCP_URL"], doc_id)
++
+     async def read_document(self, doc_id):
+         return self.body
+ 

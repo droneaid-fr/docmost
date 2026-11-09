@@ -197,3 +197,16 @@ constant in `apps/server/src/droneaid/search/search-config.ts`, used by
 ```bash
 cd apps/server && pnpm test:e2e -- droneaid/french-search   # needs the step's Postgres with migrations
 ```
+
+## Hermes agent cutover files (`droneaid/hermes/`)
+
+Checked in S3c against a local Docmost with a test copy of the DA France profile.
+
+- `SOUL.docmost.diff`: the knowledge-base section of the agent's `SOUL.md` for Docmost (spaces,
+  folders as pages, no AFFiNE naming). Apply with `patch SOUL.md < SOUL.docmost.diff`; then
+  replace the Guest list doc id (`GZFuJceixu`) with the migrated doc's id.
+- `pdf-import.patch`: `mcp/pdf-import` returns the `url` Docmost reports (from
+  `create_document`, or `get_document_info` for an existing doc) and still builds the AFFiNE
+  link when the endpoint is AFFiNE's. Apply with `git apply` in `mcp/pdf-import`. Its config
+  keeps the env names `AFFINE_MCP_URL` / `AFFINE_MCP_TOKEN`; point them at
+  `https://<host>/api/droneaid/mcp` and the agent's `dmcp_` token.
