@@ -116,6 +116,17 @@ export async function movePage(
     };
   }
 
+  const parentId = parent?.id ?? null;
+  // Computed before a space move, so nothing that can fail on its own is
+  // left between the two writes.
+  const position = await siblingPosition(
+    ctx,
+    toSpace.id,
+    parentId,
+    opts.position ?? 'last',
+    page.id,
+  );
+
   let current = page;
   if (toSpace.id !== page.spaceId) {
     if (!fromSpace?.canWrite || !toSpace.canWrite) {
@@ -125,25 +136,65 @@ export async function movePage(
         ),
       };
     }
-    await ctx.deps.pageService.movePageToSpace(page, toSpace.id, ctx.user.id);
-    current = await ctx.deps.pageRepo.findById(page.id);
+    const moved = await ctx.deps.pageService.movePageToSpace(
+      page,
+      toSpace.id,
+      ctx.user.id,
+    );
     await notifyTree(ctx, page, 'structure');
+    try {
+      current = await ctx.deps.pageRepo.findById(page.id);
+      await ctx.deps.pageService.movePage(
+        { pageId: current.id, parentPageId: parentId, position },
+        current,
+      );
+    } catch (error) {
+      // Core's space move cannot be undone cleanly (it re-roots hidden
+      // sub-pages and deletes shares), so say exactly where things stand.
+      return {
+        refused: toolError(
+          partialMoveMessage({
+            title: page.title,
+            from: fromSpace?.name ?? page.spaceId,
+            to: toSpace.name,
+            parent: parent?.title ?? null,
+            subPages: moved?.childPageIds?.length ?? 0,
+            sharesRemoved: moved?.deletedShares?.length ?? 0,
+            error: errorMessage(error),
+          }),
+        ),
+      };
+    }
+    await notifyTree(ctx, current, 'structure');
+    return { itemId: current.id, parentId, spaceId: toSpace.id };
   }
 
-  const parentId = parent?.id ?? null;
-  const position = await siblingPosition(
-    ctx,
-    toSpace.id,
-    parentId,
-    opts.position ?? 'last',
-    current.id,
-  );
   await ctx.deps.pageService.movePage(
     { pageId: current.id, parentPageId: parentId, position },
     current,
   );
   await notifyTree(ctx, current, 'structure');
   return { itemId: current.id, parentId, spaceId: toSpace.id };
+}
+
+export function partialMoveMessage(info: {
+  title: string | null;
+  from: string;
+  to: string;
+  parent: string | null;
+  subPages: number;
+  sharesRemoved: number;
+  error: string;
+}): string {
+  const what = `"${info.title || 'untitled'}"`;
+  const subPages = info.subPages
+    ? ` with ${info.subPages} sub-page${info.subPages === 1 ? '' : 's'}`
+    : '';
+  const shares = info.sharesRemoved
+    ? ` ${info.sharesRemoved} public share${info.sharesRemoved === 1 ? ' was' : 's were'} removed by the move.`
+    : '';
+  const target = info.parent ? `under "${info.parent}"` : 'at its new position';
+  return `Partly moved: ${what}${subPages} is now at the top level of space "${info.to}" (it was in "${info.from}"), but placing it ${target} failed: ${info.error}.${shares} Call move_folder_item again to finish, or to move it back.`;
 }
 
 export const createFolderTool = defineTool({

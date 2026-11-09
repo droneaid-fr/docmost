@@ -45,6 +45,9 @@ const ROLES: Record<string, string> = {
   'sp-shared': 'reader',
 };
 const UUID = '01a1bd77-0000-7000-8000-000000000001';
+const ON_GENERAL = '01a1bd77-0000-7000-8000-000000000002';
+const ON_SHARED = '01a1bd77-0000-7000-8000-000000000003';
+const OTHERS_UPLOAD = '01a1bd77-0000-7000-8000-000000000004';
 
 const db = createDatabaseData({
   title: 'Guests',
@@ -133,7 +136,10 @@ function setup(opts: { seed?: Record<string, any> } = {}) {
   });
   const created: any[] = [];
   const attachments = new Map<string, any>([
-    [UUID, { id: UUID, workspaceId: 'ws-1', fileName: 'fig 1.png', pageId: null }],
+    [UUID, { id: UUID, workspaceId: 'ws-1', fileName: 'fig 1.png', pageId: null, creatorId: 'agent-1' }],
+    [ON_GENERAL, { id: ON_GENERAL, workspaceId: 'ws-1', fileName: 'g.png', pageId: 'p-gen', creatorId: 'u-2' }],
+    [ON_SHARED, { id: ON_SHARED, workspaceId: 'ws-1', fileName: 's.png', pageId: 'p-shared', creatorId: 'u-2' }],
+    [OTHERS_UPLOAD, { id: OTHERS_UPLOAD, workspaceId: 'ws-1', fileName: 'o.png', pageId: null, creatorId: 'u-2' }],
   ]);
 
   const deps: any = {
@@ -263,6 +269,29 @@ describe('markdown-in helpers', () => {
   it('drops a leading H1 only when it repeats the title', () => {
     expect(stripLeadingTitle('# Report\n\nBody', 'report')).toBe('\nBody');
     expect(stripLeadingTitle('# Other\n\nBody', 'Report')).toBe('# Other\n\nBody');
+  });
+});
+
+describe('images that point at existing files', () => {
+  it('accepts only files on readable pages or the caller\'s own uploads', async () => {
+    const { ctx, created } = setup();
+    const reply = json(
+      await createDocumentTool.execute(
+        {
+          title: 'Figures',
+          content: [ON_SHARED, ON_GENERAL, OTHERS_UPLOAD]
+            .map((id) => `![](${BASE}/api/files/${id}/x.png)`)
+            .join('\n\n'),
+        },
+        ctx,
+      ),
+    );
+    const content = JSON.stringify(created[0].content);
+    expect(content).toContain(`"attachmentId":"${ON_SHARED}"`);
+    expect(content).not.toContain(ON_GENERAL);
+    expect(content).not.toContain(OTHERS_UPLOAD);
+    expect(reply.warnings).toHaveLength(2);
+    expect(reply.warnings[0]).toMatch(/not found/);
   });
 });
 
@@ -522,6 +551,24 @@ describe('folder tools (page tree)', () => {
     ).toEqual({ success: true, itemId: 'p-agent', parentId: 'p-team', spaceId: 'sp-team' });
     expect(deps.pageService.movePageToSpace).toHaveBeenCalled();
     expect(pages.get('p-agent')).toMatchObject({ spaceId: 'sp-team', parentPageId: 'p-team' });
+  });
+
+  it('move_folder_item says exactly what happened when a space move half-fails', async () => {
+    const { ctx, deps, pages } = setup();
+    deps.pageService.movePageToSpace.mockImplementationOnce(async (moved: any, spaceId: string) => {
+      pages.set(moved.id, { ...moved, spaceId, parentPageId: null });
+      return { childPageIds: ['c1', 'c2'], deletedShares: [{ id: 's1' }] };
+    });
+    deps.pageService.movePage.mockRejectedValueOnce(new Error('Page location changed'));
+    const result = await moveFolderItemTool.execute(
+      { item_id: 'p-agent', parent_id: 'p-team' },
+      ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe(
+      'Partly moved: "Agent notes" with 2 sub-pages is now at the top level of space "Team" (it was in "Agent Space"), but placing it under "Team folder" failed: Page location changed. 1 public share was removed by the move. Call move_folder_item again to finish, or to move it back.',
+    );
+    expect(pages.get('p-agent')).toMatchObject({ spaceId: 'sp-team', parentPageId: null });
   });
 
   it('move_folder_item is refused into read-only spaces and for read-only pages', async () => {

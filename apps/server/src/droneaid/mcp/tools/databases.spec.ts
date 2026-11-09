@@ -500,6 +500,26 @@ describe('row tools', () => {
     });
   });
 
+  it('caps a database at 5000 rows in total, as creation does', async () => {
+    const full = createDatabaseData({
+      title: 'Big',
+      columns: [{ name: 'Item', type: 'title' }],
+      rows: Array.from({ length: 4999 }, (_, i) => ({ Item: `r${i}` })),
+    });
+    const { ctx, dbState } = setup({ 'p-agent': doc(databaseToJson(full)) });
+    const before = dbState('p-agent');
+    const over = await addDatabaseRowsTool.execute(
+      { docId: 'p-agent', rows: [{ Item: 'a' }, { Item: 'b' }] },
+      ctx,
+    );
+    expect(text(over)).toMatch(/has 4999 rows; adding 2 would pass the limit of 5000 rows/);
+    expect(dbState('p-agent')).toBe(before);
+    const last = json(
+      await addDatabaseRowsTool.execute({ docId: 'p-agent', rows: [{ Item: 'a' }] }, ctx),
+    );
+    expect(last.rowIds).toHaveLength(1);
+  });
+
   it('adds nothing when one row has a bad value', async () => {
     const { ctx, dbState } = setup(seed);
     const before = dbState('p-agent');

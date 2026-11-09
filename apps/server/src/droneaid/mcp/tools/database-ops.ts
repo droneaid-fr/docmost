@@ -32,6 +32,9 @@ import {
  * (layout, value rules) is S4a's: droneaid/database and editor-ext.
  */
 
+/** Most rows a database may hold through MCP (create and add alike). */
+export const MAX_DATABASE_ROWS = 5000;
+
 /** Column types MCP writes. `rich-text` is AFFiNE's name for `text`. */
 export const WRITABLE_TYPES = [
   'text',
@@ -253,6 +256,11 @@ export function addRowsChecked(
   rows: RowValues[],
 ): string[] {
   const data = readDatabase(doc, databaseId);
+  if (data.rows.length + rows.length > MAX_DATABASE_ROWS) {
+    throw new DatabaseError(
+      `This database has ${data.rows.length} rows; adding ${rows.length} would pass the limit of ${MAX_DATABASE_ROWS} rows. Nothing was added.`,
+    );
+  }
   rows.forEach((values, i) =>
     withRow(`Row ${i + 1}`, () => encodeRowValues(data.columns, values)),
   );

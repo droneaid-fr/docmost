@@ -24,7 +24,9 @@ import { normalizeUrl, scanMarkers } from './keep-blocks';
  *    text is the page title, otherwise an internal link;
  *  - an image pointing at an uploaded file (`blob://<id>` from upload_image,
  *    or `/api/files/<id>/...`) gets the file URL and attachment id the editor
- *    expects.
+ *    expects, if the caller may read that file (it is on a page the caller
+ *    can read, or is the caller's own unattached upload); otherwise the
+ *    image is dropped with a warning.
  */
 
 export type LinkedPage = { docId: string; title: string };
@@ -80,6 +82,18 @@ export function attachmentRefFromSrc(
   const path = normalizeUrl(src, baseUrl);
   const file = path && /^(?:\/api)?\/files\/([0-9a-fA-F-]{36})(?:\/|$)/.exec(path);
   return file ? { id: file[1].toLowerCase(), blob: false } : null;
+}
+
+/**
+ * A file the caller may put in a page: one on a page it can read, or its
+ * own upload not yet attached to any page (from upload_image).
+ */
+async function canReadAttachment(
+  ctx: McpToolContext,
+  attachment: { pageId?: string | null; creatorId?: string | null },
+): Promise<boolean> {
+  if (attachment.pageId) return !!(await ctx.findReadablePage(attachment.pageId));
+  return attachment.creatorId === ctx.user.id;
 }
 
 export function fileUrl(attachment: { id: string; fileName: string }) {
@@ -154,6 +168,12 @@ export async function markdownToDoc(
         warnings.push(`Image ${src} not found; upload it with upload_image.`);
         $img.remove();
       }
+      continue;
+    }
+    if (!(await canReadAttachment(ctx, attachment))) {
+      // Same answer as for a missing file, so ids cannot be probed.
+      warnings.push(`Image ${src} not found; upload it with upload_image.`);
+      $img.remove();
       continue;
     }
     $img.attr('src', fileUrl(attachment));

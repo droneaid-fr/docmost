@@ -22,6 +22,7 @@ import {
   applyColumnOps,
   ColumnOp,
   createFromSpec,
+  MAX_DATABASE_ROWS,
   pickDatabase,
   readView,
   removeRowsChecked,
@@ -41,7 +42,7 @@ import { editablePage, isRefusal } from './write-access';
  */
 
 const MAX_COLUMNS = 50;
-const MAX_ROWS = 5000;
+const MAX_ROWS = MAX_DATABASE_ROWS;
 const MAX_ROWS_PER_CALL = 1000;
 const MAX_CELL_CHARS = 10_000;
 const READ_LIMIT = 100;
@@ -221,7 +222,7 @@ export const createDatabaseTool = defineTool({
 export const addDatabaseRowsTool = defineTool({
   name: 'add_database_rows',
   title: 'Add Database Rows',
-  description: `Add rows to the end of a database. Each row is an object of values by column name; columns left out stay empty. ${VALUE_HELP} All rows are added, or none if any value is invalid. Up to ${MAX_ROWS_PER_CALL} rows per call. Returns the new row ids.`,
+  description: `Add rows to the end of a database. Each row is an object of values by column name; columns left out stay empty. ${VALUE_HELP} All rows are added, or none if any value is invalid. Up to ${MAX_ROWS_PER_CALL} rows per call and ${MAX_ROWS} rows in the database. Returns the new row ids.`,
   access: 'write',
   audience: 'all',
   inputSchema: z
