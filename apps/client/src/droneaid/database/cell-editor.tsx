@@ -1,6 +1,5 @@
-import { memo, useEffect, useState, KeyboardEvent } from "react";
-import { Checkbox, TagsInput } from "@mantine/core";
-import { IconExternalLink } from "@tabler/icons-react";
+import { KeyboardEvent, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CellValue,
   DatabaseColumn,
@@ -8,139 +7,115 @@ import {
   cellText,
   toCellValue,
 } from "@docmost/editor-ext";
+import { SelectEditor } from "./select-editor";
 import classes from "./database-view.module.css";
 
 /**
- * One cell, edited in place. Text-like cells commit on blur or Enter (Escape
- * reverts); the others commit on change. Invalid input reverts and flags.
+ * The editor for the active cell, mounted only while editing. Enter
+ * commits, Tab / Shift+Tab commit and move, Escape cancels, blur commits.
+ * Invalid input stays open and is flagged.
  */
+
+export type Move = "up" | "down" | "left" | "right" | null;
 
 export interface CellEditorProps {
   column: DatabaseColumn;
   value: CellValue;
-  editable: boolean;
+  /** Text typed to start editing; replaces the value. */
+  initial?: string;
+  /** Saves a value without leaving edit mode (multi-select toggles). */
   onChange: (value: CellValue) => void;
+  /** Saves (unless unchanged) and leaves edit mode, then moves. */
+  onCommit: (value: CellValue, move: Move) => void;
+  onCancel: () => void;
 }
 
-function TextLikeCell({ column, value, editable, onChange }: CellEditorProps) {
-  const text = cellText(value);
-  const [draft, setDraft] = useState(text);
-  const [focused, setFocused] = useState(false);
+function moveFor(event: KeyboardEvent): Move | undefined {
+  if (event.key === "Tab") return event.shiftKey ? "left" : "right";
+  if (event.key === "Enter") return null;
+  return undefined;
+}
+
+function InputEditor({ column, value, initial, onCommit, onCancel }: CellEditorProps) {
+  const { t } = useTranslation("droneaid");
+  const isDate = column.type === "date";
+  const [draft, setDraft] = useState(
+    initial !== undefined && !isDate ? initial : isDate ? String(value ?? "") : cellText(value),
+  );
   const [invalid, setInvalid] = useState(false);
+  const done = useRef(false);
+  const ref = useRef<HTMLInputElement>(null);
 
-  // Remote edits replace the draft unless this user is typing in the cell.
   useEffect(() => {
-    if (!focused) setDraft(text);
-  }, [text, focused]);
+    const input = ref.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    if (initial === undefined && !isDate) input.select();
+  }, []);
 
-  const commit = () => {
-    if (draft === text) return;
+  const commit = (move: Move) => {
+    if (done.current) return;
     try {
-      onChange(toCellValue(column, draft));
-      setInvalid(false);
+      const next = toCellValue(column, draft);
+      done.current = true;
+      onCommit(next, move);
     } catch (error) {
       if (!(error instanceof DatabaseError)) throw error;
       setInvalid(true);
-      setDraft(text);
     }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") event.currentTarget.blur();
+    event.stopPropagation();
     if (event.key === "Escape") {
-      setDraft(text);
-      event.currentTarget.blur();
+      event.preventDefault();
+      done.current = true;
+      onCancel();
+      return;
+    }
+    const move = moveFor(event);
+    if (move !== undefined) {
+      event.preventDefault();
+      commit(move);
     }
   };
 
   return (
-    <div className={classes.textCell}>
-      <input
-        className={classes.input}
-        data-invalid={invalid || undefined}
-        value={draft}
-        readOnly={!editable}
-        inputMode={column.type === "number" ? "decimal" : undefined}
-        style={column.type === "number" ? { textAlign: "right" } : undefined}
-        onFocus={() => setFocused(true)}
-        onChange={(e) => setDraft(e.currentTarget.value)}
-        onBlur={() => {
-          setFocused(false);
-          commit();
-        }}
-        onKeyDown={onKeyDown}
-        aria-label={column.name}
-      />
-      {column.type === "link" && typeof value === "string" && (
-        <a
-          className={classes.linkOpen}
-          href={value}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Open link"
-        >
-          <IconExternalLink size={14} />
-        </a>
-      )}
-    </div>
-  );
-}
-
-function SelectCell({ column, value, editable, onChange }: CellEditorProps) {
-  const labels = Array.isArray(value) ? value : value ? [String(value)] : [];
-  const single = column.type === "select";
-  return (
-    <TagsInput
-      size="xs"
-      variant="unstyled"
-      className={classes.tags}
-      data={column.options.map((o) => o.label)}
-      value={labels}
-      maxTags={single ? 1 : undefined}
-      readOnly={!editable}
-      clearable={false}
-      comboboxProps={{ withinPortal: true }}
-      onChange={(next) => {
-        const list = single ? next.slice(-1) : next;
-        onChange(toCellValue(column, list));
+    <input
+      ref={ref}
+      type={isDate ? "date" : "text"}
+      className={classes.input}
+      data-invalid={invalid || undefined}
+      title={invalid ? t("database.invalid") : undefined}
+      aria-invalid={invalid || undefined}
+      value={draft}
+      inputMode={column.type === "number" ? "decimal" : undefined}
+      style={column.type === "number" ? { textAlign: "right" } : undefined}
+      onChange={(e) => {
+        setDraft(e.currentTarget.value);
+        setInvalid(false);
       }}
+      onBlur={() => {
+        if (done.current) return;
+        try {
+          const next = toCellValue(column, draft);
+          done.current = true;
+          onCommit(next, null);
+        } catch {
+          // Leaving an invalid value: keep the old one.
+          done.current = true;
+          onCancel();
+        }
+      }}
+      onKeyDown={onKeyDown}
       aria-label={column.name}
     />
   );
 }
 
-function CellEditorInner(props: CellEditorProps) {
-  const { column, value, editable, onChange } = props;
-  switch (column.type) {
-    case "checkbox":
-      return (
-        <div className={classes.center}>
-          <Checkbox
-            size="xs"
-            checked={value === true}
-            disabled={!editable}
-            onChange={(e) => onChange(e.currentTarget.checked || null)}
-            aria-label={column.name}
-          />
-        </div>
-      );
-    case "date":
-      return (
-        <input
-          type="date"
-          className={classes.input}
-          value={typeof value === "string" ? value : ""}
-          readOnly={!editable}
-          onChange={(e) => onChange(toCellValue(column, e.currentTarget.value, true))}
-          aria-label={column.name}
-        />
-      );
-    case "select":
-    case "multi-select":
-      return <SelectCell {...props} />;
-    default:
-      return <TextLikeCell {...props} />;
+export function CellEditor(props: CellEditorProps) {
+  if (props.column.type === "select" || props.column.type === "multi-select") {
+    return <SelectEditor {...props} />;
   }
+  return <InputEditor {...props} />;
 }
-
-export const CellEditor = memo(CellEditorInner);

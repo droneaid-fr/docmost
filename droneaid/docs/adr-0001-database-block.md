@@ -137,10 +137,17 @@ without a marker imports as a normal table, never as a database.
 - Server-side edits (MCP, S4c) operate on the Y elements inside the `default` fragment through
   the collaboration server (`openDirectConnection` + `transact`). Model:
   `apps/server/src/droneaid/database/`.
-- Sort and filter (S4b) are view state. They will be one more attribute on the database node,
-  where last-writer-wins is acceptable for view settings.
-- A copy and paste of a database inside one page duplicates its `id`. MCP resolves a
-  database by id and reports ambiguity. Re-iding on paste is open work.
+- Sort and filter (S4b) are view state: the `view` attribute on the database node
+  (`{sorts: [{column, direction}], filters: [{id, column, op, value}]}`, see `view.ts`), so it
+  is shared, persisted and last-writer-wins. It travels in HTML (`data-view`) and in the
+  Markdown marker. Readers (read-only editor, share pages) sort and filter locally without
+  writing it.
+- A copy and paste (or any local insert) of a database inside one page gets fresh database,
+  column and row ids from an `appendTransaction` rule in the node extension
+  (`databaseIdPlugin`). The original keeps its ids. Remote (Yjs) changes are never re-ided,
+  so clients cannot diverge.
+- Moving a row or a column (S4b) re-inserts its node. A concurrent edit by someone else to
+  that row or column while it moves is lost.
 
 ## Measurements (S4a, dev server, headless Chromium, 777 rows × 8 columns)
 
