@@ -50,6 +50,7 @@ import PageAttachmentsModal from "@/features/attachments/components/page-attachm
 import PresentationModal from "@/features/editor/components/presentation/presentation-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import { PageShareModal } from "@/ee/page-permission";
+import PageTranslationsButton from "@/droneaid/translate/page-translations-button.tsx";
 import {
   PageVerificationMenuItem,
   PageVerificationModal,
@@ -117,6 +118,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
       {!readOnly && !page?.isBase && <PageEditModeToggle size="xs" />}
 
       <PageShareModal readOnly={readOnly} />
+      <PageTranslationsButton pageId={page?.id} />
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <ActionIcon

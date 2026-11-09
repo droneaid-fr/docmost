@@ -13,6 +13,8 @@ import { DocumentTitle } from "@/components/ui/document-title.tsx";
 import DocsBreadcrumbs from "@/features/public-space/components/docs/docs-breadcrumbs.tsx";
 import DocsPageNav from "@/features/public-space/components/docs/docs-page-nav.tsx";
 import DocsFooterBranding from "@/features/public-space/components/docs/docs-footer-branding.tsx";
+import { useSharedTranslation } from "@/droneaid/translate/use-shared-translation.ts";
+import ShareLanguageMenu from "@/droneaid/translate/share-language-menu.tsx";
 
 export default function SharedPage() {
   const { t } = useTranslation();
@@ -25,6 +27,7 @@ export default function SharedPage() {
   });
 
   const sharedTreeData = useAtomValue(sharedTreeDataAtom);
+  const translation = useSharedTranslation(data?.page?.id);
 
   useEffect(() => {
     if (shareId && data) {
@@ -35,13 +38,13 @@ export default function SharedPage() {
           sharedTreeData && isPageInTree(sharedTreeData, data.page.slugId);
 
         if (!isPartOfTree) {
-          navigate(`/share/${data.share.key}/p/${pageSlug}`, { replace: true });
+          navigate(`/share/${data.share.key}/p/${pageSlug}${window.location.search}`, { replace: true });
         }
       }
     }
   }, [shareId, data, sharedTreeData]);
 
-  if (isLoading) {
+  if (isLoading || translation.loading) {
     return (
       <Stack gap="md" pt={4} aria-hidden>
         <Skeleton height={13} width={180} radius="sm" />
@@ -64,7 +67,7 @@ export default function SharedPage() {
   return (
     <div>
       <DocumentTitle
-        title={data?.page?.title || t("untitled")}
+        title={translation.active?.title || data?.page?.title || t("untitled")}
         withAppName={false}
       >
         {!data?.share.searchIndexing && (
@@ -73,11 +76,12 @@ export default function SharedPage() {
       </DocumentTitle>
 
       <DocsBreadcrumbs />
+      <ShareLanguageMenu translation={translation} />
 
       <ReadonlyPageEditor
-        key={data.page.id}
-        title={data.page.title}
-        content={data.page.content}
+        key={`${data.page.id}:${translation.active?.lang ?? ""}`}
+        title={translation.active?.title ?? data.page.title}
+        content={translation.active?.content ?? data.page.content}
         pageId={data.page.id}
         shareId={data.share.id}
         trailingSpace={false}

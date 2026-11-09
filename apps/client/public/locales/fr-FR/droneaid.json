@@ -189,5 +189,34 @@
       "none": "Aucune option correspondante",
       "remove": "Retirer {{label}}"
     }
+  },
+  "translate": {
+    "button": "Traductions",
+    "label": "Traductions",
+    "source": "Rédigé en",
+    "update": "Mettre à jour les traductions",
+    "saveFailed": "Impossible de mettre à jour les traductions",
+    "hint": "Les lecteurs de la page publique peuvent passer à ces langues. Les traductions sont automatiques et ne suivent les modifications qu'après une mise à jour.",
+    "status": {
+      "pending": "En attente",
+      "running": "Traduction…",
+      "ready": "Prête",
+      "failed": "Échec",
+      "outOfDate": "Pas à jour"
+    },
+    "reader": {
+      "label": "Langue",
+      "original": "{{language}} (original)",
+      "originalUnknown": "Original"
+    },
+    "language": {
+      "en": "Anglais",
+      "fr": "Français",
+      "es": "Espagnol",
+      "pt": "Portugais",
+      "de": "Allemand",
+      "pl": "Polonais",
+      "nl": "Néerlandais"
+    }
   }
 }
