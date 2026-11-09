@@ -4,3 +4,8 @@
 /data
 **/.env*
 **/.nx
+# DroneAid: Docmost Enterprise code never enters the build context (S8)
+apps/client/src/ee
+apps/server/src/ee
+packages/ee
+packages/base-formula

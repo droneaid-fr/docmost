@@ -42,6 +42,4 @@ export enum EventName {
 
   BASE_SCHEMA_BUMPED = 'base.schema.bumped',
   BASE_ROWS_UPDATED = 'base.rows.updated',
-  BASE_FORMULA_RECOMPUTE_STARTED = 'base.formula.recompute.started',
-  BASE_FORMULA_RECOMPUTE_COMPLETED = 'base.formula.recompute.completed',
 }
