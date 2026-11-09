@@ -5,8 +5,9 @@ import { listFoldersTool } from './folders';
 import { documentWriteTools } from './document-write';
 import { folderWriteTools } from './folder-write';
 import { imageTools } from './images';
+import { databaseTools } from './databases';
 
-/** Every MCP tool. S4c adds the database tools. */
+/** Every MCP tool. */
 export const ALL_TOOLS: McpTool<any>[] = [
   ...documentTools,
   docSearchTool,
@@ -14,4 +15,5 @@ export const ALL_TOOLS: McpTool<any>[] = [
   ...documentWriteTools,
   ...folderWriteTools,
   ...imageTools,
+  ...databaseTools,
 ];

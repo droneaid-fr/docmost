@@ -38,8 +38,9 @@ export const KEPT_NODE_TYPES: ReadonlySet<string> = new Set([
   'integrationCard',
 ]);
 
+/** `<!-- database id=X -->`, or the long form read_document writes. */
 const DATABASE_MARKER_LINE =
-  /^[ \t]*<!--\s*database\s+id=([A-Za-z0-9_-]+)\s*-->[ \t]*$/;
+  /^[ \t]*<!--\s*database\s+id=([A-Za-z0-9_-]+)(?:\s[^\n]*?)?\s*-->[ \t]*$/;
 const FENCE = /^[ \t]{0,3}(```|~~~)/;
 
 /**

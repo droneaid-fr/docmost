@@ -1,13 +1,55 @@
+import { DATABASE_NODE, findDatabasesInJson } from '@docmost/editor-ext';
 import { Page } from '@docmost/db/types/entity.types';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 import type { McpToolContext } from './context';
 
 /**
  * Node types rendered as one `<!-- database id=... -->` line instead of their
- * content. Empty until the database block exists (S4c adds its node name);
- * the agent's SOUL.md already expects this marker from AFFiNE.
+ * content (the marker the agent's SOUL.md expects from AFFiNE). The data is
+ * read and changed with the database tools; update_document keeps the
+ * database wherever its marker line stands (keep-blocks.ts).
  */
-export const DATABASE_NODE_TYPES: ReadonlySet<string> = new Set<string>();
+export const DATABASE_NODE_TYPES: ReadonlySet<string> = new Set<string>([
+  DATABASE_NODE,
+]);
+
+/** One line of text safe inside the marker comment. */
+function inline(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/--+/g, '-')
+    .replace(/"/g, "'")
+    .replace(/>/g, ')')
+    .trim();
+}
+
+/** The marker line, as our AFFiNE fork wrote it. */
+export function databaseMarker(info: {
+  id: string;
+  title: string;
+  rows: number;
+  columns: number;
+}): string {
+  return `<!-- database id=${info.id} "${inline(info.title) || 'Database'}" (${info.rows} rows, ${info.columns} columns): read it with read_database and edit it with the database tools. update_document keeps it in place. -->`;
+}
+
+/** Marker lines for the databases in a ProseMirror doc, by database id. */
+export function databaseMarkers(json: any): Map<string, string> {
+  const markers = new Map<string, string>();
+  for (const db of findDatabasesInJson(json)) {
+    if (!db.id || markers.has(db.id)) continue;
+    markers.set(
+      db.id,
+      databaseMarker({
+        id: db.id,
+        title: db.title,
+        rows: db.rows.length,
+        columns: db.columns.length,
+      }),
+    );
+  }
+  return markers;
+}
 
 const MARKER_TOKEN = 'DRONEAIDDBMARKER';
 const MARKER_LINE = new RegExp(`^.*${MARKER_TOKEN}:([A-Za-z0-9_-]+).*$`, 'gm');
@@ -41,10 +83,13 @@ export function replaceDatabaseNodes(
   return visit(json);
 }
 
-export function restoreDatabaseMarkers(markdown: string): string {
+export function restoreDatabaseMarkers(
+  markdown: string,
+  markers: ReadonlyMap<string, string> = new Map(),
+): string {
   return markdown.replace(
     MARKER_LINE,
-    (_line, id) => `<!-- database id=${id} -->`,
+    (_line, id) => markers.get(id) ?? `<!-- database id=${id} -->`,
   );
 }
 
@@ -68,7 +113,9 @@ export async function pageToMarkdown(
 ): Promise<string> {
   const exportService = ctx.deps.exportService;
   const base = ctx.baseUrl;
-  const withMarkers = replaceDatabaseNodes(getProsemirrorContent(page.content));
+  const json = getProsemirrorContent(page.content);
+  const markers = databaseMarkers(json);
+  const withMarkers = replaceDatabaseNodes(json);
   const content = await exportService.turnPageMentionsToLinks(
     withMarkers,
     ctx.workspace.id,
@@ -79,5 +126,8 @@ export async function pageToMarkdown(
     ...page,
     content,
   })) as string;
-  return absolutizeInternalLinks(restoreDatabaseMarkers(markdown ?? ''), base);
+  return absolutizeInternalLinks(
+    restoreDatabaseMarkers(markdown ?? '', markers),
+    base,
+  );
 }
