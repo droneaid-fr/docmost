@@ -71,6 +71,16 @@ Tick each line; anything unexpected goes into the Phase 7 notes.
 - [ ] **Read-only elsewhere**: ask the agent to edit a page in DroneAid Academy → refused (it has no access there).
 - [ ] Known: unused uploads from `upload_image` are not cleaned up (S3b).
 
+## Personal MCP tokens (S9)
+
+- [ ] **Page**: as a plain member, Settings → Account → *MCP tokens* shows the endpoint `<APP_URL>/api/droneaid/mcp` with a Copy button. *Create token* (name, expiry 90 days) → the token is shown once with an example `mcpServers` JSON and a `claude mcp add` command; closing the dialog leaves only its prefix in the list.
+- [ ] **Use it**: add the JSON to an MCP client (or `curl` `tools/list` with `Authorization: Bearer dmcpu_...`) → `list_documents` shows only spaces the member is in; `create_document` in a space where they are a reader is refused; in a space where they write it works and the page's author is the member. *Last used* fills in.
+- [ ] **Not a login**: `POST /api/users/me` with the same bearer → 401.
+- [ ] **Revoke** in the list → the client gets 401 at once.
+- [ ] **Deactivate** the member (Settings → Members) → their token gets 401; reactivate → it works again.
+- [ ] **Cap**: an 11th live token is refused ("You already have 10 active tokens"); *Create token* is disabled at 10.
+- [ ] **Agents**: an agent account has no *MCP tokens* item; the API answers 403 to its create call.
+
 ## Enterprise code removed (S8)
 
 - [ ] **Settings sidebar**: Account shows Profile and Preferences; Workspace shows General, Members, Groups, Spaces, Public sharing, Integrations, Agents, Sign-up rules. No API keys, Security & SSO, Verified pages, API management, AI settings, Audit logs or License & Edition; `/settings/security` shows the 404 page.

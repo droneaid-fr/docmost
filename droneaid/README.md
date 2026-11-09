@@ -370,6 +370,40 @@ cd apps/server && pnpm test:e2e -- droneaid/french-search   # needs the step's P
   the live attributes and comment marks back; comments and formatting lost to real rewrites
   are listed in `warnings`.
 
+## Personal MCP tokens (`apps/server/src/droneaid/personal-tokens`, S9)
+
+Any human member can connect their own MCP client (Claude, Cursor, ...) to
+`${APP_URL}/api/droneaid/mcp` and act as themselves.
+
+- **Where:** Settings → Account → *MCP tokens* (`/settings/account/droneaid/mcp-tokens`,
+  client in `apps/client/src/droneaid/personal-mcp/`). The page shows the endpoint, a
+  one-time reveal of a new token with an example `mcpServers` JSON and a `claude mcp add`
+  command, and the caller's tokens (name, prefix, created, last used, expiry, revoke).
+- **API** (session JWT only, `@RequireSessionAuth`; always the caller's own tokens, no user id
+  parameter): `POST /api/droneaid/personal-tokens` (list → `{allowed, maxActive, tokens}`),
+  `/create {name, expiresInDays?}` → `{token, record}`, `/revoke {tokenId}` (404 for anyone
+  else's token).
+- **Storage:** table `droneaid_user_mcp_tokens` (migration
+  `20261112T090000-droneaid-user-mcp-tokens`), sha256 hash + 12-char display prefix only.
+  Tokens are `dmcpu_` + 43 base64url chars; agent tokens stay `dmcp_` in
+  `droneaid_agent_tokens`. The prefix routes a token to its table, so a token's kind is never
+  ambiguous. Neither is a JWT, so no other route accepts them.
+- **Expiry:** optional (UI: 30 / 90 (default) / 365 days or never; API: 1-3650 days or none).
+  `last_used_at` is written at most once a minute.
+- **Cap:** 10 live (not revoked, not expired) tokens per user, checked under a row lock on the
+  user.
+- **Checks on every MCP request** (`PersonalTokenService.authenticate` + `McpAuthGuard`):
+  token not revoked or expired; user still in the token's workspace, not deactivated, not
+  deleted; not an agent account; workspace = the request host's workspace. The principal is
+  the same as for a session JWT (`isAgent: false`, no agent space), so every tool applies the
+  member's own space and page permissions.
+- **Agents** cannot mint (403) and the sidebar item is hidden for them (the list endpoint
+  returns `allowed: false`).
+- **Deactivation/removal** stops a member's tokens at once (they are refused, not revoked).
+  Reactivating the member makes their unrevoked tokens work again.
+- **Admins** cannot list or revoke members' tokens yet (follow-up); deactivating the member is
+  the kill switch.
+
 ## Hermes agent cutover files (`droneaid/hermes/`)
 
 Checked in S3c against a local Docmost with a test copy of the DA France profile.
