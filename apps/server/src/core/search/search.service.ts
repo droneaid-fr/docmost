@@ -8,9 +8,12 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
+import { PAGE_SEARCH_TS_CONFIG } from '../../droneaid/search/search-config';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
+// droneaid: French text search config instead of 'english'
+const tsConfig = sql.lit(PAGE_SEARCH_TS_CONFIG);
 
 @Injectable()
 export class SearchService {
@@ -52,7 +55,7 @@ export class SearchService {
         ? sql<number>`word_similarity(lower(${titleQuery}), lower(pages.title))`.as(
             'rank',
           )
-        : sql<number>`ts_rank(tsv, to_tsquery('english', f_unaccent(${searchQuery})))`.as(
+        : sql<number>`ts_rank(tsv, to_tsquery(${tsConfig}, f_unaccent(${searchQuery})))`.as(
             'rank',
           );
 
@@ -73,7 +76,7 @@ export class SearchService {
         qb.where(
           'tsv',
           '@@',
-          sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`,
+          sql<string>`to_tsquery(${tsConfig}, f_unaccent(${searchQuery}))`,
         ),
       )
       .$if(!browseByFilters && titleOnly, (qb) =>
@@ -188,7 +191,7 @@ export class SearchService {
         .selectFrom('pages')
         .select([
           'id',
-          sql<string>`ts_headline('english', substring(text_content, 1, 100000), to_tsquery('english', f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`.as(
+          sql<string>`ts_headline(${tsConfig}, substring(text_content, 1, 100000), to_tsquery(${tsConfig}, f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`.as(
             'highlight',
           ),
         ])

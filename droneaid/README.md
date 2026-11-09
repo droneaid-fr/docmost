@@ -182,3 +182,18 @@ docker run -d --name docmost-s2-oidc -p 127.0.0.1:8292:8080 ghcr.io/navikt/mock-
 #       GOOGLE_OIDC_ISSUER=http://localhost:8292/default
 cd apps/server && pnpm test:e2e -- droneaid/google-auth
 ```
+
+## French search
+
+Page full-text search uses the text search configuration `droneaid_search`, a copy of
+Postgres's `french`, instead of upstream's `english` (migration
+`20261109T180000-droneaid-french-search.ts`, which also rebuilds `pages.tsv`). Accents were
+already ignored upstream through `f_unaccent`; the French stemmer adds plural/feminine forms
+(`dangereuse` → `dangereux`, `nationaux` → `nationales`) and French stop words. The name is a
+constant in `apps/server/src/droneaid/search/search-config.ts`, used by
+`core/search/search.service.ts`. If an upstream migration ever redefines
+`pages_tsvector_trigger()`, re-apply the config in a new droneaid migration.
+
+```bash
+cd apps/server && pnpm test:e2e -- droneaid/french-search   # needs the step's Postgres with migrations
+```
