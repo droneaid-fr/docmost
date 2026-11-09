@@ -62,6 +62,10 @@ const SpacesPage = lazyWithPrefetch(() => import("@/pages/spaces/spaces.tsx"));
 const DroneaidAgents = lazyWithPrefetch(
   () => import("@/droneaid/agents/agents-settings-page.tsx"),
 );
+// DroneAid: signup allowlist admin page
+const DroneaidSignupRules = lazyWithPrefetch(
+  () => import("@/droneaid/signup-rules/signup-rules-page.tsx"),
+);
 const MfaChallengePage = lazyWithPrefetch(() =>
   import("@/ee/mfa/pages/mfa-challenge-page").then((m) => ({
     default: m.MfaChallengePage,
@@ -224,6 +228,10 @@ export default function App() {
             <Route path={"verifications"} element={<VerifiedPages />} />
             <Route path={"integrations"} element={<Integrations />} />
             <Route path={"droneaid/agents"} element={<DroneaidAgents />} />
+            <Route
+              path={"droneaid/signup-rules"}
+              element={<DroneaidSignupRules />}
+            />
             {!isCloud() && <Route path={"license"} element={<License />} />}
             {isCloud() && <Route path={"billing"} element={<Billing />} />}
           </Route>

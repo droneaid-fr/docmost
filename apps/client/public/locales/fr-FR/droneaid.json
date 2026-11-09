@@ -8,11 +8,49 @@
       "account_disabled": "Ce compte est désactivé. Contactez un administrateur de l'espace de travail.",
       "account_conflict": "Ce compte est déjà associé à un autre compte Google.",
       "signup_disabled": "Aucun compte n'existe pour cette adresse, et l'inscription avec Google n'est pas activée. Demandez une invitation à un administrateur.",
-      "domain_not_allowed": "Aucun compte n'existe pour cette adresse, et son domaine n'est pas autorisé à s'inscrire. Demandez une invitation à un administrateur.",
+      "domain_not_allowed": "Aucun compte n'existe pour cette adresse, et elle ne figure pas dans la liste d'inscription. Demandez une invitation à un administrateur.",
       "not_configured": "La connexion avec Google n'est pas configurée.",
       "state_mismatch": "La session de connexion Google a expiré. Veuillez réessayer.",
       "cancelled": "La connexion avec Google a été annulée.",
       "failed": "La connexion avec Google a échoué. Veuillez réessayer."
     }
+  },
+  "signupRules": {
+    "title": "Règles d'inscription",
+    "intro": "Les règles déterminent qui peut créer un compte avec Google et dans quels espaces un nouveau compte est ajouté. Les ajouts ne s'appliquent qu'à la création du compte : modifier une règle plus tard n'ajoute ni ne retire personne.",
+    "googleNotConfigured": "La connexion avec Google n'est pas configurée sur ce serveur (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET). Les règles ajoutent quand même les comptes invités à leurs espaces.",
+    "allowGoogle": "Autoriser la création de comptes via Google pour les adresses correspondantes",
+    "allowGoogleHint": "Les comptes existants peuvent toujours se connecter. Une adresse avec une invitation en attente peut rejoindre avec Google, même sans règle.",
+    "pattern": "Domaine ou adresse",
+    "patternPlaceholder": "droneaid.fr, *.droneaid.fr ou quelquun@example.com",
+    "preview": {
+      "address": "Admet {{value}} et personne d'autre.",
+      "domain": "Admet toutes les adresses de {{value}}, mais pas de ses sous-domaines.",
+      "wildcard": "Admet toutes les adresses de {{value}} et de tous ses sous-domaines."
+    },
+    "problem": {
+      "empty": "Chaque règle a besoin d'un domaine ou d'une adresse.",
+      "whitespace": "Un motif ne peut pas contenir d'espaces : il ne correspond à personne.",
+      "address_wildcard": "Les jokers ne sont pas pris en charge dans une adresse : ce motif ne correspond à personne.",
+      "address_incomplete": "Une adresse a besoin d'un nom et d'un domaine autour du @ : ce motif ne correspond à personne.",
+      "wildcard_no_domain": "Un joker doit être suivi d'un domaine.",
+      "misplaced_wildcard": "Un joker n'est reconnu qu'en tête, sous la forme « *. » : ce motif ne correspond à personne."
+    },
+    "spaces": "Ajouter les nouveaux comptes aux espaces",
+    "spacesPlaceholder": "Choisir des espaces",
+    "missingSpace": "Espace supprimé",
+    "role": "Rôle dans l'espace",
+    "roles": {
+      "reader": "Lecture",
+      "writer": "Modification",
+      "admin": "Accès complet"
+    },
+    "addRule": "Ajouter une règle",
+    "removeRule": "Supprimer la règle",
+    "save": "Enregistrer",
+    "saved": "Règles d'inscription enregistrées",
+    "empty": "Aucune règle : personne ne peut s'inscrire avec Google, sauf les adresses invitées.",
+    "invalid": "Corrigez les règles signalées avant d'enregistrer.",
+    "adminOnly": "Seuls les administrateurs de l'espace de travail peuvent gérer les règles d'inscription."
   }
 }

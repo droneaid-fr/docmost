@@ -8,11 +8,49 @@
       "account_disabled": "This account is disabled. Contact a workspace admin.",
       "account_conflict": "This account is already linked to a different Google account.",
       "signup_disabled": "No account exists for this email, and sign-up with Google is not enabled. Ask a workspace admin for an invitation.",
-      "domain_not_allowed": "No account exists for this email, and its domain is not allowed to sign up. Ask a workspace admin for an invitation.",
+      "domain_not_allowed": "No account exists for this email, and it is not on the sign-up list. Ask a workspace admin for an invitation.",
       "not_configured": "Google sign-in is not configured.",
       "state_mismatch": "The Google sign-in session expired. Please try again.",
       "cancelled": "Google sign-in was cancelled.",
       "failed": "Google sign-in failed. Please try again."
     }
+  },
+  "signupRules": {
+    "title": "Sign-up rules",
+    "intro": "Rules decide who may create an account with Google, and which spaces a new account joins. Grants apply only when an account is created: editing a rule later adds or removes nobody.",
+    "googleNotConfigured": "Google sign-in is not configured on this server (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET). The rules still add invited accounts to their spaces.",
+    "allowGoogle": "Allow new accounts via Google for matching addresses",
+    "allowGoogleHint": "Existing accounts can always sign in. An address with a pending invitation can join with Google even without a rule.",
+    "pattern": "Domain or address",
+    "patternPlaceholder": "droneaid.fr, *.droneaid.fr or someone@example.com",
+    "preview": {
+      "address": "Admits {{value}} and nobody else.",
+      "domain": "Admits every address at {{value}}, but not at its subdomains.",
+      "wildcard": "Admits every address at {{value}} and at any subdomain of it."
+    },
+    "problem": {
+      "empty": "Every rule needs a domain or address.",
+      "whitespace": "A pattern cannot contain spaces, so this matches nobody.",
+      "address_wildcard": "Wildcards are not supported inside an address, so this matches nobody.",
+      "address_incomplete": "An address needs a name and a domain around the @, so this matches nobody.",
+      "wildcard_no_domain": "A wildcard needs a domain after it.",
+      "misplaced_wildcard": "A wildcard is only recognised as a leading \"*.\", so this matches nobody."
+    },
+    "spaces": "Add new accounts to spaces",
+    "spacesPlaceholder": "Pick spaces",
+    "missingSpace": "Deleted space",
+    "role": "Space role",
+    "roles": {
+      "reader": "Can view",
+      "writer": "Can edit",
+      "admin": "Full access"
+    },
+    "addRule": "Add rule",
+    "removeRule": "Remove rule",
+    "save": "Save",
+    "saved": "Sign-up rules saved",
+    "empty": "No rules yet: nobody can sign up with Google except invited addresses.",
+    "invalid": "Fix the highlighted rules before saving.",
+    "adminOnly": "Only workspace admins can manage sign-up rules."
   }
 }

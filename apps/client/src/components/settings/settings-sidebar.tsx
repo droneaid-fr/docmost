@@ -17,6 +17,7 @@ import {
   IconHistory,
   IconShieldCheck,
   IconRobot,
+  IconUserCheck,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -146,6 +147,13 @@ const groupedData: DataGroup[] = [
         label: "Agents",
         icon: IconRobot,
         path: "/settings/droneaid/agents",
+        role: "admin",
+      },
+      // DroneAid: signup allowlist
+      {
+        label: "Sign-up rules",
+        icon: IconUserCheck,
+        path: "/settings/droneaid/signup-rules",
         role: "admin",
       },
     ],
