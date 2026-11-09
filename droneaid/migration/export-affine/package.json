@@ -1,0 +1,6 @@
+{
+  "name": "export-affine",
+  "private": true,
+  "type": "module",
+  "description": "AFFiNE -> Docmost migration bundle exporter (runs inside the AFFiNE fork runtime, see README.md)"
+}
