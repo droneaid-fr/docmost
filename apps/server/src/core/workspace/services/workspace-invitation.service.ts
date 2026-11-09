@@ -48,6 +48,8 @@ import {
 } from '../workspace.util';
 import { INVITATION_EXPIRY_DAYS } from '../workspace.constants';
 import { addDays } from 'date-fns';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class WorkspaceInvitationService {
@@ -63,6 +65,7 @@ export class WorkspaceInvitationService {
     @InjectQueue(QueueName.BILLING_QUEUE) private billingQueue: Queue,
     private readonly environmentService: EnvironmentService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async getInvitations(workspaceId: string, pagination: PaginationOptions) {
@@ -376,6 +379,13 @@ export class WorkspaceInvitationService {
         source: 'invitation',
         invitationId: invitation.id,
       },
+    });
+
+    await this.eventEmitter.emitAsync(EventName.USER_CREATED, {
+      userId: newUser.id,
+      email: newUser.email,
+      workspaceId: workspace.id,
+      source: 'invitation',
     });
 
     if (this.environmentService.isCloud()) {

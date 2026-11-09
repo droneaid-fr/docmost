@@ -29,9 +29,20 @@ export interface DroneaidAgentTokens {
   revokedAt: Timestamp | null;
 }
 
+export interface DroneaidSignupRules {
+  id: Generated<string>;
+  workspaceId: string;
+  pattern: string;
+  spaceIds: Generated<string[]>;
+  spaceRole: Generated<string>;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface DroneaidTables {
   droneaidAgents: DroneaidAgents;
   droneaidAgentTokens: DroneaidAgentTokens;
+  droneaidSignupRules: DroneaidSignupRules;
 }
 
 export type DroneaidDB = Kysely<DbInterface & DroneaidTables>;
@@ -39,6 +50,7 @@ export type DroneaidTransaction = Transaction<DbInterface & DroneaidTables>;
 
 export type DroneaidAgent = Selectable<DroneaidAgents>;
 export type DroneaidAgentToken = Selectable<DroneaidAgentTokens>;
+export type DroneaidSignupRule = Selectable<DroneaidSignupRules>;
 
 export function droneaidDb(db: Kysely<DbInterface>): DroneaidDB {
   return db as unknown as DroneaidDB;

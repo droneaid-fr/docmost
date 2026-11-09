@@ -55,6 +55,7 @@ function buildService(invitation?: Record<string, unknown>) {
     {} as any,
     {} as any,
     auditService as any,
+    { emitAsync: jest.fn() } as any,
   );
   return { service, queries, auditService };
 }

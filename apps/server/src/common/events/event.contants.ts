@@ -13,6 +13,7 @@ export enum EventName {
   SPACE_DELETED = 'space.deleted',
 
   USER_PASSWORD_RESET = 'user.password.reset',
+  USER_CREATED = 'user.account_created',
 
   WORKSPACE_CREATED = 'workspace.created',
   WORKSPACE_UPDATED = 'workspace.updated',
