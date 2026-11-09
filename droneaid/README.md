@@ -13,6 +13,8 @@ able to get its source.
 - **Clean room.** Never open, copy or reuse anything under the Docmost Enterprise License:
   `apps/server/src/ee` (a private submodule that we never init), `apps/client/src/ee`,
   `packages/ee` and `packages/base-formula`. We re-implement such features ourselves.
+  None of these is built or shipped (see "Enterprise code is not built"); core's `@/ee/...`
+  imports resolve to our stubs in `apps/client/src/droneaid/ee-stubs/`.
 - **Our code goes in our own directories:**
   - server: `apps/server/src/droneaid/<module>/`
   - client: `apps/client/src/droneaid/<feature>/`
@@ -33,6 +35,23 @@ able to get its source.
 Remotes: `origin` = `droneaid-fr/docmost`, `upstream` = `docmost/docmost`. We pull upstream
 releases deliberately, never continuously. Never push to `main` and never open PRs against
 `docmost/docmost`.
+
+### Upstream sync policy
+
+- Merge an upstream release into `droneaid` on its own branch, then run the full checks
+  below before promoting.
+- **Run `droneaid/scripts/check-ee-stubs.sh` after every sync.** Upstream often adds a new
+  `@/ee/...` import to core. The client build then fails until a stub exists for it, because
+  `@/ee` resolves only to `apps/client/src/droneaid/ee-stubs/`. The script lists every `@/ee`
+  path and imported name that core uses and names each one the stubs lack. It also flags a
+  relative import that reaches `src/ee` (it would bypass the alias). It runs inside the client
+  tests too (`src/droneaid/ee-stubs/ee-stubs.test.ts`). Write a missing stub from the core
+  call site only (what it imports, the props it passes, what it reads back), never from the EE
+  file; start the file with a one-line `// Core expects: ...` comment, which the script checks.
+- After a sync touching the editor, collaboration or auth, re-run the database-block and
+  sign-in e2e tests.
+- Re-check that new Enterprise UI in core is hidden, not greyed out (see "Removed Enterprise
+  features (S8)").
 
 GitHub Actions is **disabled** on the fork, so upstream's `release.yml` cannot run on our tag
 pushes. We add our own deploy workflow in Phase 7.
@@ -81,7 +100,7 @@ Start the dev servers, each in its own terminal:
 
 ```bash
 # build shared packages once (pnpm run server:dev does this through nx, but buffers its output)
-NX_DAEMON=false npx nx run-many -t build -p @docmost/editor-ext @docmost/base-formula
+NX_DAEMON=false npx nx run-many -t build -p @docmost/editor-ext
 cd apps/server && pnpm start:dev                 # Nest in watch mode on :3100
 cd apps/client && npx vite --port 5100 --strictPort   # UI on http://localhost:5100
 ```
@@ -98,7 +117,12 @@ imports `dist/`.
 cd apps/server && pnpm test        # Jest unit tests (src/**/*.spec.ts)
 cd apps/server && pnpm test:e2e    # Jest e2e (test/*.e2e-spec.ts; upstream has only a stub)
 cd apps/client && NODE_OPTIONS=--no-webstorage pnpm test   # Vitest
+droneaid/scripts/check-ee-stubs.sh                         # every @/ee import has a stub
 ```
+
+Since S8 (2026-11-09): client 528/528 (the 6 test files under `src/ee`, 17 tests, are no
+longer run; 5 tests were added: stubs, checker, Translations button); server 1415/1430 with the same 17 upstream
+suites failing.
 
 Baseline on upstream v0.97.0 with Node 26:
 - Client: 469/469 tests pass. They pass only with `--no-webstorage`, because Node 26's
@@ -121,6 +145,26 @@ pnpm migration:codegen                        # regenerate src/database/types/db
 
 The build uses the repo's own `Dockerfile`. A source build never contains the EE server
 module, so the image is the free edition.
+
+### Enterprise code is not built
+
+- `.dockerignore` keeps `apps/client/src/ee`, `apps/server/src/ee`, `packages/ee` and
+  `packages/base-formula` out of the build context, so the builder stage never sees them.
+- `pnpm-workspace.yaml` excludes `packages/base-formula` and `packages/ee`; no app depends on
+  `@docmost/base-formula`; the Dockerfiles no longer copy its `dist`.
+- The client's `@/ee` alias (`vite.config.ts`, `tsconfig.json`, `vitest.config.ts`) points at
+  `apps/client/src/droneaid/ee-stubs/`; `src/ee` is excluded from tsc, ESLint and Vitest.
+
+Check an image and a client build:
+
+```bash
+# no Enterprise path in the image
+docker run --rm --entrypoint sh docmost-droneaid:local -c \
+  'find / -xdev \( -path "*/packages/ee*" -o -path "*base-formula*" -o -path "*/src/ee*" -o -path "*/dist/ee*" \) -print' | wc -l   # 0
+# no module from src/ee in the bundle: build with sourcemaps and scan every map's sources
+cd apps/client && npx vite build --sourcemap --outDir /tmp/client-maps --emptyOutDir
+node -e 'const fs=require("fs");let n=0;for(const f of fs.readdirSync("/tmp/client-maps/assets"))if(f.endsWith(".map"))for(const s of JSON.parse(fs.readFileSync("/tmp/client-maps/assets/"+f)).sources)if(/src\/ee\/|packages\/ee\/|base-formula/.test(s))n++;console.log(n)'   # 0
+```
 
 ```bash
 # amd64, loaded into the local engine (~100 s on the dev host)
@@ -357,9 +401,9 @@ like the Google sign-in keys.
 - **Choosing languages:** the **Translations** button beside **Share** in the page header
   (shown while the page is shared to the web) holds the source language, the target
   languages (EN, FR, ES, PT, DE, PL, NL), each language's status, an "Out of date" flag and
-  **Update translations**. Core's share menu is an EE component, so the panel has its own
-  popover. Only users who could share the page (edit right, sharing allowed, no restricted
-  ancestor) can change it.
+  **Update translations**. The panel has its own popover next to core's Share popover and
+  appears as soon as the page is shared there. Only users who could share the page (edit
+  right, sharing allowed, no restricted ancestor) can change it.
 - **Job:** a BullMQ job scheduler on `{droneaid-translate}` ticks every 30 s (saving or Update
   adds a tick 2 s later; kicks within that window share one job id, so a burst costs one tick).
   Each tick deletes translations of pages that are trashed or no longer shared (one SQL
@@ -402,3 +446,68 @@ TRANSLATE_REFRESH_QUIET_MINUTES=0.1` in `.env`):
 DRONEAID_E2E_URL=http://localhost:3500 DRONEAID_E2E_EMAIL=... DRONEAID_E2E_PASSWORD=... \
   pnpm --filter server test:e2e -- droneaid-translate
 ```
+
+## Removed Enterprise features (S8)
+
+Docmost's Enterprise code (`apps/client/src/ee`, `packages/ee`, `packages/base-formula`; the
+server half `apps/server/src/ee` was never present) is not part of our build. Core reaches it
+through `@/ee/...` imports, which resolve to inert stubs in
+`apps/client/src/droneaid/ee-stubs/`: every licence check is off, upgrade labels render
+nothing, components render nothing. Where a page holds content an Enterprise feature made (an
+embedded Base), it shows a neutral "Base is not available in this edition" block; the node
+stays in the document.
+
+What these features offered, in Docmost's public words (descriptions from the pages cited
+below and from names visible in core, never from the Enterprise code):
+
+| Feature (Docmost name) | What it offered | Replacement | Where |
+|---|---|---|---|
+| MCP server ("AI & MCP") | AI clients search, read, create and update pages over MCP, authorised by OAuth or API key. | **Ours** | `POST /api/droneaid/mcp`; agents and tokens in Settings → Agents |
+| Bases (incl. Kanban) | Table and Kanban views with properties, filters, sorts and formulas. | **Ours**: the database block | slash menu → Database; Base embeds from upstream pages show the neutral block |
+| Page-level permissions | View and edit rights on single pages. | **Core space roles** | Space settings → Members; the agent writes only in its own space |
+| SSO: SAML 2.0, OIDC, LDAP; enforce SSO | Sign-in through the company identity provider or directory. | none | |
+| Google SSO | Google as an SSO provider. | **Ours** | "Continue with Google" (`/api/droneaid/auth/google`) |
+| Security & SSO settings (incl. allowed email domains) | Admin screen for SSO providers and sign-up domains. | **Ours** for sign-up domains | Settings → Sign-up rules |
+| MFA (two-factor, TOTP) | Authenticator-app second factor at sign-in. | none | |
+| API keys, API management | Personal REST API keys and admin key management. | none (agent tokens cover the agent) | Settings → Agents |
+| OAuth apps ("Authorized apps") | MCP clients authorised by OAuth, revocable per user. | none (agent tokens) | |
+| Audit logs | Record of sign-ins, membership, permission, sharing and integration changes. | none | |
+| SIEM / log streaming | Audit events streamed to Splunk, Datadog or HTTP. | none | |
+| SCIM provisioning | Users and groups provisioned and deactivated from the identity provider. | none | |
+| AI: AI Chat, AI Answers in search, Ask AI in the editor, AI settings | Workspace Q&A, natural-language search answers, writing help on selected text. | none (our machine translation of published pages is a separate feature) | |
+| Page verification | Review, verify and approve pages. | none | |
+| Templates | Create and reuse page templates. | none | |
+| Comment resolution | Mark comment threads resolved. | none | |
+| DOCX import, PDF import, Confluence import | Import Word, PDF and Confluence exports as pages. | core Markdown/HTML/Notion/ZIP import; the agent's PDF import (Hermes `pdf-import` over our MCP) | Space menu → Import pages |
+| DOCX export, PDF export | Word and server-rendered PDF export. | core Markdown/HTML export; browser print | Page menu → Export |
+| Attachment search | Full-text search inside PDF and DOCX attachments. | none (core page search, French config ours) | |
+| Personal spaces | A private space per user. | none | |
+| Sharing controls, viewer comments (space Security tab) | Turn public sharing off per workspace or space; let viewers comment. | none (public sharing itself is core) | |
+| Retention controls | Audit-log and data retention settings. | none | |
+| Typesense search driver | Alternative search engine. | core Postgres search | |
+| Public space appearance | Colours of the public docs site (beta public spaces). | none | |
+| Licence & Edition, billing, trial, cloud hostname | Licence key, plans and cloud workspace setup. | not applicable | |
+
+What disappeared from the UI:
+
+- Routes: `/settings/security`, `/settings/api-keys`, `/settings/account/api-keys`, `/settings/ai`,
+  `/settings/audit`, `/settings/siem`, `/settings/verifications`, `/settings/license`,
+  `/settings/billing`, `/templates`, `/base/:pageId`, `/ai`, `/login/mfa`, `/oauth/consent`,
+  `/pdf-render/:pageId`, and the cloud-only `/create`, `/select`, `/verify-email`.
+- Settings sidebar: API keys, Security & SSO, Verified pages, API management, AI settings, Audit
+  logs & SIEM, License & Edition (licence-gated items are now hidden, not greyed out).
+- Upgrade and "Enterprise" badges: the Templates entry in the main sidebar, Templates in the
+  space menu, Base and Kanban in the slash menu and the toolbar's More inserts, Resolve comment
+  in the comment menu, Word in the export formats, Attachments in the search filter, DOCX, PDF
+  and Confluence in the import dialog, the Security tab of space settings, the templates and
+  personal-space switches of workspace settings.
+- The page header's **Share** now opens core's share popover (share to web, include sub-pages,
+  search indexing, link to open) instead of the Enterprise permission dialog.
+
+Sources (fetched 2026-11-09): https://docmost.com/pricing, https://docmost.com/docs,
+https://docmost.com/docs/editions, https://docmost.com/docs/user-guide/authentication,
+https://docmost.com/docs/user-guide/ai, https://docmost.com/docs/user-guide/mcp,
+https://docmost.com/docs/user-guide/audit-logs, https://docmost.com/docs/user-guide/import-export.
+Feature names not described there (enforce SSO, personal spaces, viewer comments, retention,
+public space appearance, OAuth apps' admin side) come from core's licence keys
+(`apps/server/src/common/features.ts`) and core's UI labels.
