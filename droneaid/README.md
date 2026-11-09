@@ -210,3 +210,55 @@ Checked in S3c against a local Docmost with a test copy of the DA France profile
   link when the endpoint is AFFiNE's. Apply with `git apply` in `mcp/pdf-import`. Its config
   keeps the env names `AFFINE_MCP_URL` / `AFFINE_MCP_TOKEN`; point them at
   `https://<host>/api/droneaid/mcp` and the agent's `dmcp_` token.
+
+## Translation of published pages (`apps/server/src/droneaid/translate`)
+
+Port of our AFFiNE fork's `plugins/translate`. Off unless `TRANSLATE_ENABLED=true`.
+
+| Env var | Meaning |
+|---|---|
+| `TRANSLATE_ENABLED` | `true` turns the feature on (UI, API and the job). |
+| `GEMINI_API_KEY` | Gemini key. Without it every job fails with "not configured". Core also reads this name for its AI features; both may share the key. |
+| `GEMINI_MODEL` | Default `gemini-3.5-flash-lite`. |
+| `TRANSLATE_GEMINI_BASE_URL` | Tests only: point the client at a fake Gemini. |
+
+There is no admin settings toggle: the switch and the key live in the server environment,
+like the Google sign-in keys.
+
+- **Choosing languages:** the **Translations** button beside **Share** in the page header
+  (shown while the page is shared to the web) holds the source language, the target
+  languages (EN, FR, ES, PT, DE, PL, NL), each language's status, an "Out of date" flag and
+  **Update translations**. Core's share menu is an EE component, so the panel has its own
+  popover. Only users who could share the page (edit right, sharing allowed, no restricted
+  ancestor) can change it.
+- **Job:** a BullMQ job scheduler on `{droneaid-translate}` ticks every 30 s (saving or Update
+  adds an immediate tick). Each tick deletes translations of pages that are no longer shared,
+  then translates due rows one language at a time: each text block of the page becomes one
+  Markdown block (Docmost's JSON → Markdown export), blocks are packed into ~4000-character
+  chunks for Gemini, each chunk is structure-checked (block count, heading level, ⟦n⟧
+  placeholders, link targets) with one retry, and a 429 backs off 1 min, doubling, up to six
+  times. The translated blocks come back through Docmost's Markdown → JSON path and only
+  replace the text of their block.
+- **Kept untranslated in place:** databases (cell values are data), images, files, embeds,
+  video, Draw.io, Excalidraw, math, code blocks, sub-page lists, transclusion references; inline
+  mentions, inline math and status chips travel as ⟦n⟧ placeholders. Nothing makes a page
+  fail. Lost inside translated text: underline and text colour.
+- **Storage:** `droneaid_page_translations` (one row per page and language, ProseMirror
+  `content` snapshot, `source_hash`). Not pages, so never in the tree or search.
+- **Readers:** `POST /api/droneaid/translate/shared {pageId, lang?}` (public, same gate as core's
+  share page-info). The share page shows a language menu; `?lang=xx` picks a language, and an
+  unknown one shows the original. The share page's `<title>`, `og:title` and `<html lang>`
+  follow `?lang=` too.
+- **Out of date:** the source hash ignores block ids, schema defaults and comments, so opening
+  a page does not flag it. Re-translation is manual (Update).
+- **Unpublishing** deletes the page's translations on the next tick (≤ 30 s); a deleted page
+  takes them with it (foreign key).
+
+E2E against a fake Gemini (the test serves it on 127.0.0.1:8295; start the dev server with
+`TRANSLATE_ENABLED=true GEMINI_API_KEY=fake-key
+TRANSLATE_GEMINI_BASE_URL=http://127.0.0.1:8295/v1beta/models` in `.env`):
+
+```bash
+DRONEAID_E2E_URL=http://localhost:3500 DRONEAID_E2E_EMAIL=... DRONEAID_E2E_PASSWORD=... \
+  pnpm --filter server test:e2e -- droneaid-translate
+```
