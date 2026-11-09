@@ -27,7 +27,9 @@ const base = (over: Partial<DecisionInput> = {}): DecisionInput => ({
   userByEmail: null,
   userByEmailLinkedSub: null,
   allowSignup: true,
-  emailDomains: ['droneaid.fr'],
+  allowedByRules: true,
+  pendingInvitation: null,
+  emailDomains: [],
   ...over,
 });
 
@@ -109,6 +111,7 @@ describe('decideGoogleSignIn', () => {
             claims: claims({ email: 'bob@gmail.com' }),
             userByEmail: user({ email: 'bob@gmail.com' }),
             emailDomains: ['droneaid.fr'],
+            allowedByRules: false,
             allowSignup: false,
           }),
         ),
@@ -141,7 +144,7 @@ describe('decideGoogleSignIn', () => {
   });
 
   describe('unknown email', () => {
-    it('signs up an allowed domain, lower-casing the email', () => {
+    it('signs up when a rule matches, lower-casing the email', () => {
       expect(decideGoogleSignIn(base())).toEqual({
         action: 'signup',
         email: 'alice@droneaid.fr',
@@ -149,24 +152,58 @@ describe('decideGoogleSignIn', () => {
       });
     });
 
-    it('signs up any domain when the domain list is empty', () => {
-      expect(
-        decideGoogleSignIn(
-          base({ claims: claims({ email: 'x@gmail.com' }), emailDomains: [] }),
-        ),
-      ).toMatchObject({ action: 'signup', email: 'x@gmail.com' });
+    it('refuses when no rule matches', () => {
+      expect(decideGoogleSignIn(base({ allowedByRules: false }))).toEqual({
+        action: 'refuse',
+        code: 'domain_not_allowed',
+      });
     });
 
-    it('refuses a domain outside the list', () => {
+    it('ignores core email_domains on the rule path', () => {
       expect(
-        decideGoogleSignIn(base({ claims: claims({ email: 'x@gmail.com' }) })),
-      ).toEqual({ action: 'refuse', code: 'domain_not_allowed' });
+        decideGoogleSignIn(base({ emailDomains: ['other.org'] })),
+      ).toMatchObject({ action: 'signup' });
     });
 
-    it('refuses when signup is disabled, even for an allowed domain', () => {
+    it('refuses when signup is disabled, even when a rule matches', () => {
       expect(decideGoogleSignIn(base({ allowSignup: false }))).toEqual({
         action: 'refuse',
         code: 'signup_disabled',
+      });
+    });
+  });
+
+  describe('unknown email with a pending invitation', () => {
+    const invited = (over: Partial<DecisionInput> = {}) =>
+      base({
+        pendingInvitation: { id: 'inv-1' },
+        allowedByRules: false,
+        allowSignup: false,
+        ...over,
+      });
+
+    it('joins through the invitation with no rule and signup off', () => {
+      expect(decideGoogleSignIn(invited())).toEqual({
+        action: 'signup_invited',
+        email: 'alice@droneaid.fr',
+        name: 'Alice',
+        invitationId: 'inv-1',
+      });
+    });
+
+    it('applies core email_domains, as invitation acceptance does', () => {
+      expect(
+        decideGoogleSignIn(invited({ emailDomains: ['other.org'] })),
+      ).toEqual({ action: 'refuse', code: 'domain_not_allowed' });
+      expect(
+        decideGoogleSignIn(invited({ emailDomains: ['droneaid.fr'] })),
+      ).toMatchObject({ action: 'signup_invited' });
+    });
+
+    it('an existing account still just signs in', () => {
+      expect(decideGoogleSignIn(invited({ userByEmail: user() }))).toEqual({
+        action: 'link_and_login',
+        userId: 'user-1',
       });
     });
   });

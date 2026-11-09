@@ -36,9 +36,19 @@ export interface DecisionInput {
   userByEmail?: DecisionUser | null;
   /** Google `sub` already linked to `userByEmail`, if that user has a Google link. */
   userByEmailLinkedSub?: string | null;
-  /** `auth_providers.allow_signup` of our Google provider row. */
+  /**
+   * "Allow new accounts via Google for matching addresses"
+   * (`auth_providers.allow_signup` of our Google provider row).
+   */
   allowSignup: boolean;
-  /** `workspaces.email_domains`; empty or null means every domain is allowed. */
+  /** Whether a signup rule (`droneaid_signup_rules`) matches the Google email. */
+  allowedByRules: boolean;
+  /** A pending (unexpired) workspace invitation for the Google email, if any. */
+  pendingInvitation?: { id: string } | null;
+  /**
+   * `workspaces.email_domains`; empty or null means every domain is allowed. Read
+   * only for invitees, because core invitation acceptance enforces it.
+   */
   emailDomains?: string[] | null;
 }
 
@@ -46,6 +56,12 @@ export type Decision =
   | { action: 'login'; userId: string }
   | { action: 'link_and_login'; userId: string }
   | { action: 'signup'; email: string; name?: string }
+  | {
+      action: 'signup_invited';
+      email: string;
+      name?: string;
+      invitationId: string;
+    }
   | { action: 'refuse'; code: GoogleRefusalCode };
 
 function isDisabled(user: DecisionUser): boolean {
@@ -91,8 +107,8 @@ export function decideGoogleSignIn(input: DecisionInput): Decision {
     return { action: 'login', userId: input.linkedUser.id };
   }
 
-  // 2. Existing user with this email: link it. The domain rule never applies here,
-  //    so existing accounts are never locked out by it.
+  // 2. Existing user with this email: link it. Neither the rules nor the domain
+  //    list apply here, so existing accounts are never locked out.
   if (input.userByEmail) {
     if (isDisabled(input.userByEmail)) {
       return { action: 'refuse', code: 'account_disabled' };
@@ -107,11 +123,26 @@ export function decideGoogleSignIn(input: DecisionInput): Decision {
     return { action: 'link_and_login', userId: input.userByEmail.id };
   }
 
-  // 3. Unknown email: signup, only if allowed by the provider setting and the domain list.
+  // 3. Unknown email with a pending invitation: join through the invitation, as
+  //    accepting it would. The invitation is the admin's consent, so neither the
+  //    Google switch nor the rules apply; core's domain list does, as in core.
+  if (input.pendingInvitation) {
+    if (!isEmailDomainAllowed(email, input.emailDomains)) {
+      return { action: 'refuse', code: 'domain_not_allowed' };
+    }
+    return {
+      action: 'signup_invited',
+      email: email.toLowerCase(),
+      name: claims.name,
+      invitationId: input.pendingInvitation.id,
+    };
+  }
+
+  // 4. Unknown email: signup, only if Google signup is on and a rule matches.
   if (!input.allowSignup) {
     return { action: 'refuse', code: 'signup_disabled' };
   }
-  if (!isEmailDomainAllowed(email, input.emailDomains)) {
+  if (!input.allowedByRules) {
     return { action: 'refuse', code: 'domain_not_allowed' };
   }
   return { action: 'signup', email: email.toLowerCase(), name: claims.name };
