@@ -23,11 +23,13 @@
     "allowSyntheticDefaultImports": true,
 
     "paths": {
+      "@/ee/*": ["./src/droneaid/ee-stubs/*"],
       "@/*": ["./src/*"]
     }
   },
   "include": [
     "src"
   ],
+  "exclude": ["src/ee"],
   "references": [{ "path": "./tsconfig.node.json"}]
 }

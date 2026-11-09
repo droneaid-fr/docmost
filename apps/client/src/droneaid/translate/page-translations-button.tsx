@@ -1,6 +1,8 @@
 import { Button, Indicator, Popover } from "@mantine/core";
 import { IconLanguage } from "@tabler/icons-react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useShareForPageQuery } from "@/features/share/queries/share-query.ts";
 import {
   ShareTranslationsPanel,
   usePageTranslationsQuery,
@@ -8,13 +10,22 @@ import {
 
 /**
  * "Translations" button beside Share in the page header, shown only while
- * the feature is on and the page is shared to the web. (Core's share menu is
- * an EE component we may not edit, so the panel sits in its own popover.)
- * The dot marks a translation that is out of date or failed.
+ * the feature is on and the page is shared to the web. The panel sits in its
+ * own popover next to core's share popover. The dot marks a translation that
+ * is out of date or failed.
  */
 export function PageTranslationsButton({ pageId }: { pageId?: string }) {
   const { t } = useTranslation("droneaid");
-  const { data } = usePageTranslationsQuery(pageId);
+  const { data, refetch } = usePageTranslationsQuery(pageId);
+  // Sharing or unsharing in core's Share popover shows or hides this button at once.
+  const { data: share } = useShareForPageQuery(pageId);
+  const shareId = share?.id;
+  const lastShareId = useRef(shareId);
+  useEffect(() => {
+    if (lastShareId.current === shareId) return;
+    lastShareId.current = shareId;
+    if (pageId) void refetch();
+  }, [pageId, shareId]);
 
   if (!data?.enabled || !data.published) return null;
 

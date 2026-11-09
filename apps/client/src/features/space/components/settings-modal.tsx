@@ -76,11 +76,6 @@ export default function SpaceSettingsModal({
                       {t("Publish")}
                     </Tabs.Tab>
                   )}
-                  {canManageSettings && (
-                    <Tabs.Tab fw={500} value="security">
-                      {t("Security")}
-                    </Tabs.Tab>
-                  )}
                 </Tabs.List>
 
                 <Tabs.Panel value="general">

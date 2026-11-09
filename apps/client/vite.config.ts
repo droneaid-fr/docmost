@@ -55,6 +55,8 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
+        // DroneAid: Enterprise code is never built; core's @/ee imports resolve to our stubs
+        "@/ee": "/src/droneaid/ee-stubs",
         "@": "/src",
       },
     },

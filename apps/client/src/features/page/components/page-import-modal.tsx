@@ -374,6 +374,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           )}
         </FileButton>
 
+        {canUseDocx && (
         <FileButton
           onChange={handleFileUpload}
           accept=".docx"
@@ -400,7 +401,9 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             </Tooltip>
           )}
         </FileButton>
+        )}
 
+        {canUsePdf && (
         <FileButton
           onChange={handleFileUpload}
           accept=".pdf"
@@ -427,6 +430,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             </Tooltip>
           )}
         </FileButton>
+        )}
 
         <FileButton
           onChange={(file) => handleZipUpload(file, "notion")}
@@ -447,6 +451,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             </Button>
           )}
         </FileButton>
+        {canUseConfluence && (
         <FileButton
           onChange={(file) => handleZipUpload(file, "confluence")}
           accept="application/zip"
@@ -472,6 +477,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             </Tooltip>
           )}
         </FileButton>
+        )}
       </SimpleGrid>
 
       <Group justify="center" gap="xl" mih={150}>

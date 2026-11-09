@@ -330,7 +330,7 @@ function SpaceMenu({
             {isWatching ? t("Stop watching space") : t("Watch space")}
           </Menu.Item>
 
-          {canManagePages && (
+          {canManagePages && hasTemplates && (
             <>
               <Menu.Divider />
               <Tooltip

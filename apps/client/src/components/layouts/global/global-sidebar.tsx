@@ -69,7 +69,7 @@ export default function GlobalSidebar() {
     <div className={classes.navbar}>
       <ScrollArea w="100%" style={{ flex: 1 }}>
         <div className={classes.section}>
-          {mainNavItems.map((item) =>
+          {mainNavItems.filter((item) => !item.disabled).map((item) =>
             item.disabled ? (
               <Tooltip
                 key={item.label}

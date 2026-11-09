@@ -94,13 +94,7 @@ function CommentMenu({
             >
               {isResolved ? t("Re-open comment") : t("Resolve comment")}
             </Menu.Item>
-          ) : (
-            <Tooltip label={upgradeLabel} position="left" withinPortal={false}>
-              <Menu.Item disabled leftSection={<IconCircleCheck size={14} />}>
-                {t("Resolve comment")}
-              </Menu.Item>
-            </Tooltip>
-          ))}
+          ) : null)}
         <Menu.Item
           leftSection={<IconLink size={14} />}
           onClick={handleCopyLink}

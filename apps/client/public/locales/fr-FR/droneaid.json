@@ -219,5 +219,8 @@
       "pl": "Polonais",
       "nl": "Néerlandais"
     }
+  },
+  "eeStubs": {
+    "notAvailable": "{{what}} n’est pas disponible dans cette édition."
   }
 }

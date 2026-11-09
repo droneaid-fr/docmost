@@ -107,7 +107,7 @@ export default function ExportModal({
             <ExportFormatSelection
               format={format}
               onChange={handleChange}
-              includeDocx={type === "page"}
+              includeDocx={type === "page" && docxEntitled}
               docxEntitled={docxEntitled}
             />
           </Group>

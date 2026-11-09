@@ -835,6 +835,8 @@ export const getSuggestionItems = ({
   for (const [group, items] of Object.entries(CommandGroups)) {
     const filteredItems = items.filter((item) => {
       if (excludeItems?.has(item.title)) return false;
+      // DroneAid: Bases are Enterprise-only and never available in this build
+      if (item.requiresBases) return false;
       if (editor && item.disable?.(editor)) return false;
       const translatedTitle = i18n.t(item.title);
       const translatedDescription = i18n.t(item.description);

@@ -119,7 +119,7 @@ export const MoreInsertsGroup: FC<Props> = ({ editor, templateMode }) => {
             {t("Synced block")}
           </Menu.Item>
         )}
-        {!templateMode && (
+        {!templateMode && hasBases && (
           <Tooltip label={upgradeLabel} disabled={hasBases} position="right">
             <Menu.Item
               leftSection={<IconTable size={16} />}
@@ -141,7 +141,7 @@ export const MoreInsertsGroup: FC<Props> = ({ editor, templateMode }) => {
             </Menu.Item>
           </Tooltip>
         )}
-        {!templateMode && (
+        {!templateMode && hasBases && (
           <Tooltip label={upgradeLabel} disabled={hasBases} position="right">
             <Menu.Item
               leftSection={<IconLayoutKanban size={16} />}

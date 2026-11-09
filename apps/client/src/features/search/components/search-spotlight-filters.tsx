@@ -72,7 +72,7 @@ export function SearchSpotlightFilters({
       label: t("Attachments"),
       disabled: !hasAttachmentIndexing,
     },
-  ];
+  ].filter((option) => !option.disabled);
 
   useEffect(() => {
     onFiltersChange?.({

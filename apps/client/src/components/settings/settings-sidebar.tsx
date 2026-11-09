@@ -123,12 +123,6 @@ const groupedData: DataGroup[] = [
         role: "admin",
       },
       {
-        label: "AI settings",
-        icon: IconSparkles,
-        path: "/settings/ai",
-        role: "admin",
-      },
-      {
         label: "Audit logs & SIEM",
         icon: IconHistory,
         path: "/settings/audit",
@@ -155,16 +149,6 @@ const groupedData: DataGroup[] = [
         icon: IconUserCheck,
         path: "/settings/droneaid/signup-rules",
         role: "admin",
-      },
-    ],
-  },
-  {
-    heading: "System",
-    items: [
-      {
-        label: "License & Edition",
-        icon: IconKey,
-        path: "/settings/license",
       },
     ],
   },
@@ -198,6 +182,8 @@ export default function SettingsSidebar() {
     if (item.requiresInstalledIntegration && !installedIntegrations?.length) {
       return false;
     }
+    // DroneAid: licence-gated (Enterprise) items are hidden, not greyed out
+    if (isItemDisabled(item)) return false;
     return true;
   };
 
