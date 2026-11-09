@@ -1,6 +1,7 @@
 import { CellValue, DatabaseColumn, DatabaseData } from "./types";
 import { cellText, readCellValue, readOptions, toCellValue } from "./values";
 import { newDatabaseId, readColumnAttrs, withUsedOptions } from "./model";
+import { isEmptyView, readView } from "./view";
 
 /**
  * HTML form of the block: a wrapper div holding a real <table>, so HTML
@@ -8,7 +9,7 @@ import { newDatabaseId, readColumnAttrs, withUsedOptions } from "./model";
  * types, options and typed values ride on data attributes, so parsing the
  * HTML back restores the block exactly.
  *
- *   <div data-type="droneaid-database" data-id data-title>
+ *   <div data-type="droneaid-database" data-id data-title [data-view='json']>
  *     <table><thead><tr><th data-column-id data-column-type data-options data-width>Name
  *     <tbody><tr data-row-id><td data-value='json'>text
  */
@@ -33,6 +34,10 @@ function valueAttrs(value: CellValue): Record<string, string> {
   return value === null ? {} : { "data-value": json(value) };
 }
 
+function viewAttrs(data: DatabaseData): Record<string, string> {
+  return data.view && !isEmptyView(data.view) ? { "data-view": json(data.view) } : {};
+}
+
 /** ProseMirror DOMOutputSpec (renderHTML). */
 export function databaseDomSpec(data: DatabaseData): any {
   return [
@@ -41,6 +46,7 @@ export function databaseDomSpec(data: DatabaseData): any {
       "data-type": DATABASE_HTML_TYPE,
       "data-id": data.id,
       "data-title": data.title,
+      ...viewAttrs(data),
       class: "droneaid-database",
     },
     [
@@ -103,7 +109,8 @@ export function databaseToHtml(data: DatabaseData): string {
     .join("");
   return (
     `<div data-type="${DATABASE_HTML_TYPE}" data-id="${escapeHtml(data.id)}"` +
-    ` data-title="${escapeHtml(data.title)}" class="droneaid-database">` +
+    ` data-title="${escapeHtml(data.title)}"${attrString(viewAttrs(data))}` +
+    ` class="droneaid-database">` +
     `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
   );
 }
@@ -169,10 +176,12 @@ export function readDatabaseElement(element: Element): DatabaseData {
     });
     return { id: tr.getAttribute("data-row-id") || newDatabaseId(), cells };
   });
+  const view = readView(element.getAttribute("data-view"));
   return withUsedOptions({
     id: element.getAttribute("data-id") || newDatabaseId(),
     title: element.getAttribute("data-title") ?? "",
     columns,
     rows,
+    ...(isEmptyView(view) ? {} : { view }),
   });
 }

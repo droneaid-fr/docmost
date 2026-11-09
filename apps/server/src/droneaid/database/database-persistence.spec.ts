@@ -64,6 +64,24 @@ describe('database persistence', () => {
     expect(node.child(1).childCount).toBe(8 + 777);
   });
 
+  it('keeps the shared sort and filter view through ydoc and the server schema', () => {
+    const view = {
+      sorts: [{ column: data.columns[2].id, direction: 'desc' as const }],
+      filters: [
+        { id: 'f1', column: data.columns[3].id, op: 'is' as const, value: 'Partner' },
+      ],
+    };
+    const withView = {
+      type: 'doc',
+      content: [databaseToJson({ ...data, view })],
+    };
+    const ydoc = TiptapTransformer.toYdoc(withView, 'default', tiptapExtensions);
+    expect(readDatabase(ydoc).view).toEqual(view);
+    const stored = TiptapTransformer.fromYdoc(ydoc, 'default');
+    expect(findDatabasesInJson(stored)[0].view).toEqual(view);
+    expect(findDatabasesInJson(jsonToNode(stored).toJSON())[0].view).toEqual(view);
+  });
+
   it('stores a server-side edit and loads it back', () => {
     const ydoc = TiptapTransformer.toYdoc(content, 'default', tiptapExtensions);
     updateRows(ydoc, data.id, [{ id: data.rows[500].id, values: { Staff: 4242 } }]);

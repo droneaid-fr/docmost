@@ -6,6 +6,8 @@
  * view of that tree, shared by the client view, the server and MCP.
  */
 
+import type { DatabaseViewState } from "./view";
+
 export const DATABASE_NODE = "droneaidDatabase";
 export const DATABASE_COLUMN_NODE = "droneaidDatabaseColumn";
 export const DATABASE_ROW_NODE = "droneaidDatabaseRow";
@@ -69,6 +71,8 @@ export interface DatabaseData {
   title: string;
   columns: DatabaseColumn[];
   rows: DatabaseRow[];
+  /** Shared sort and filter state; absent when there is none (see view.ts). */
+  view?: DatabaseViewState;
 }
 
 /** What a caller may pass as a cell value; converted per column type. */

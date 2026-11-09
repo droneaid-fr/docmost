@@ -2,6 +2,7 @@ import { DatabaseColumn, DatabaseData, SelectOption } from "./types";
 import { cellText, isColumnType, readOptions, toCellValue } from "./values";
 import { newDatabaseId, withUsedOptions } from "./model";
 import { DATABASE_HTML_TYPE, databaseToHtml, readDatabaseElement } from "./html";
+import { DatabaseViewState, isEmptyView, readView } from "./view";
 
 /**
  * Markdown form: a marker comment with the schema and row ids, then a GFM
@@ -24,6 +25,7 @@ interface MarkerMeta {
   title: string;
   columns: { id: string; name: string; type: string; options?: SelectOption[]; width?: number }[];
   rows: string[];
+  view?: DatabaseViewState;
 }
 
 /** JSON safe inside an HTML comment (no "<", ">" or "--" sequences). */
@@ -74,6 +76,7 @@ export function databaseToMarkdown(data: DatabaseData): string {
       ...(c.width ? { width: c.width } : {}),
     })),
     rows: data.rows.map((r) => r.id),
+    ...(data.view && !isEmptyView(data.view) ? { view: data.view } : {}),
   };
   const line = (cells: string[]) => `| ${cells.join(" | ")} |`;
   const lines = [
@@ -101,6 +104,7 @@ function readMeta(text: string): MarkerMeta | null {
       title: typeof meta.title === "string" ? meta.title : "",
       columns: meta.columns.filter((c: any) => c && typeof c.id === "string"),
       rows: Array.isArray(meta.rows) ? meta.rows.map(String) : [],
+      view: readView(meta.view),
     };
   } catch {
     return null;
@@ -147,7 +151,11 @@ export function parseDatabaseMarkdown(
     });
     return { id: meta.rows[index] ?? newDatabaseId(), cells };
   });
-  return { data: withUsedOptions({ id: meta.id, title: meta.title, columns, rows }), raw };
+  const view = meta.view && !isEmptyView(meta.view) ? { view: meta.view } : {};
+  return {
+    data: withUsedOptions({ id: meta.id, title: meta.title, columns, rows, ...view }),
+    raw,
+  };
 }
 
 /** marked block extension: marker + table -> the block's HTML. */

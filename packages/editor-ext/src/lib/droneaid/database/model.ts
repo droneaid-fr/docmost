@@ -22,6 +22,7 @@ import {
   toCellValue,
   valueLabels,
 } from "./values";
+import { isEmptyView, readView } from "./view";
 
 /**
  * Typed reads of the database tree, whichever form it is in (ProseMirror
@@ -91,11 +92,13 @@ export function readDatabaseTree<T>(
     }
     return { id: String(adapter.attrs(rowNode).id ?? ""), cells };
   });
+  const view = readView(attrs.view);
   return {
     id: String(attrs.id ?? ""),
     title: typeof attrs.title === "string" ? attrs.title : "",
     columns,
     rows,
+    ...(isEmptyView(view) ? {} : { view }),
   };
 }
 
@@ -171,7 +174,11 @@ export function rowJson(row: DatabaseRow, columns: DatabaseColumn[]) {
 export function databaseToJson(data: DatabaseData) {
   return {
     type: DATABASE_NODE,
-    attrs: { id: data.id, title: data.title },
+    attrs: {
+      id: data.id,
+      title: data.title,
+      ...(data.view && !isEmptyView(data.view) ? { view: data.view } : {}),
+    },
     content: [
       ...data.columns.map((c) => ({
         type: DATABASE_COLUMN_NODE,
