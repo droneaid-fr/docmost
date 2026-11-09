@@ -13,7 +13,7 @@ import {
   extractMentions,
   extractPageMentions,
 } from '../../../common/helpers/prosemirror/utils';
-import { markersToTokens, normalizeUrl } from './keep-blocks';
+import { normalizeUrl, scanMarkers } from './keep-blocks';
 
 /**
  * Markdown from an MCP caller -> ProseMirror JSON, through core's own
@@ -35,6 +35,8 @@ export type ParsedMarkdown = {
   attachmentIds: string[];
   linkedPages: LinkedPage[];
   warnings: string[];
+  /** Text sent between a kept container's start and end markers, by key. */
+  regions: Map<string, string>;
 };
 
 const norm = (text: string | null | undefined) =>
@@ -89,8 +91,8 @@ export async function markdownToDoc(
   markdown: string,
   opts: { title?: string | null } = {},
 ): Promise<ParsedMarkdown> {
-  const source = markersToTokens(stripLeadingTitle(markdown ?? '', opts.title));
-  const html = await markdownToHtml(source);
+  const scanned = scanMarkers(stripLeadingTitle(markdown ?? '', opts.title));
+  const html = await markdownToHtml(scanned.markdown);
   const $ = load(html, null, false);
   const baseUrl = ctx.baseUrl;
   const warnings: string[] = [];
@@ -179,6 +181,7 @@ export async function markdownToDoc(
     attachmentIds: [...attachmentIds],
     linkedPages: [...linked.values()],
     warnings,
+    regions: scanned.regions,
   };
 }
 

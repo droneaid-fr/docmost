@@ -2,6 +2,12 @@ import { DATABASE_NODE, findDatabasesInJson } from '@docmost/editor-ext';
 import { Page } from '@docmost/db/types/entity.types';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 import type { McpToolContext } from './context';
+import {
+  containerKeyer,
+  containerMarker,
+  isKeptType,
+  KEPT_CONTAINERS,
+} from './keep-blocks';
 
 /**
  * Node types rendered as one `<!-- database id=... -->` line instead of their
@@ -93,6 +99,55 @@ export function restoreDatabaseMarkers(
   );
 }
 
+const REGION_TOKEN = 'DRONEAIDREGION';
+const REGION_LINE = new RegExp(
+  `^.*${REGION_TOKEN}:(synced-block|columns|tabs):([A-Za-z0-9_-]+):(start|end).*$`,
+  'gm',
+);
+
+const tokenParagraph = (text: string) => ({
+  type: 'paragraph',
+  content: [{ type: 'text', text }],
+});
+
+/**
+ * Puts a start and an end token around each outermost kept container
+ * (synced block, columns, tabs), numbered as update_document numbers them
+ * (containerKeyer). The container itself is rendered in between, flattened,
+ * for reading.
+ */
+export function wrapContainers(json: any): any {
+  if (!json || typeof json !== 'object') return json;
+  const keyOf = containerKeyer();
+  const visit = (node: any): any => {
+    if (!node || typeof node !== 'object' || !Array.isArray(node.content)) {
+      return node;
+    }
+    return {
+      ...node,
+      content: node.content.flatMap((child: any) => {
+        const key = KEPT_CONTAINERS.has(child?.type) ? keyOf(child) : null;
+        if (key) {
+          return [
+            tokenParagraph(`${REGION_TOKEN}:${key}:start`),
+            child,
+            tokenParagraph(`${REGION_TOKEN}:${key}:end`),
+          ];
+        }
+        // Not inside other kept blocks: update_document does not look there.
+        return isKeptType(child?.type) ? [child] : [visit(child)];
+      }),
+    };
+  };
+  return visit(json);
+}
+
+export function restoreContainerMarkers(markdown: string): string {
+  return markdown.replace(REGION_LINE, (_line, kind, id, edge) =>
+    containerMarker(`${kind}:${id}`, edge),
+  );
+}
+
 /** Root-relative page links (`/s/...`, `/p/...`) become absolute URLs. */
 export function absolutizeInternalLinks(
   markdown: string,
@@ -115,7 +170,7 @@ export async function pageToMarkdown(
   const base = ctx.baseUrl;
   const json = getProsemirrorContent(page.content);
   const markers = databaseMarkers(json);
-  const withMarkers = replaceDatabaseNodes(json);
+  const withMarkers = replaceDatabaseNodes(wrapContainers(json));
   const content = await exportService.turnPageMentionsToLinks(
     withMarkers,
     ctx.workspace.id,
@@ -127,7 +182,7 @@ export async function pageToMarkdown(
     content,
   })) as string;
   return absolutizeInternalLinks(
-    restoreDatabaseMarkers(markdown ?? '', markers),
+    restoreContainerMarkers(restoreDatabaseMarkers(markdown ?? '', markers)),
     base,
   );
 }

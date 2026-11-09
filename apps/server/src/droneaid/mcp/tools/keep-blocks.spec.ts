@@ -16,8 +16,10 @@ import {
   composeWithKept,
   dropTokens,
   KEEP_TOKEN,
+  containerMarker,
   markersToTokens,
   normalizeUrl,
+  scanMarkers,
   restoreImageAttrs,
 } from './keep-blocks';
 import { liveJson, replaceFragment } from './live-doc';
@@ -72,6 +74,30 @@ describe('markersToTokens', () => {
     expect(out).toContain(`${KEEP_TOKEN}:database:abc\n`);
     expect(out).not.toContain('<!--');
     expect(markersToTokens('<!-- database id=abc-->x -->')).not.toContain(KEEP_TOKEN);
+  });
+});
+
+describe('scanMarkers (kept containers)', () => {
+  const start = containerMarker('synced-block:ts1', 'start');
+  const end = containerMarker('synced-block:ts1', 'end');
+
+  it('turns a start..end region into one token and remembers its text', () => {
+    const out = scanMarkers(`a\n${start}\n\nshown text\n\n${end}\nb`);
+    expect(out.markdown).toBe(`a\n\n${KEEP_TOKEN}:synced-block:ts1\n\nb`);
+    expect(out.regions.get('synced-block:ts1')).toBe('\nshown text\n');
+  });
+
+  it('keeps the text after a start line whose end line is missing', () => {
+    const out = scanMarkers(`${start}\nstill here`);
+    expect(out.markdown).toContain(`${KEEP_TOKEN}:synced-block:ts1`);
+    expect(out.markdown).toContain('still here');
+    expect(out.regions.size).toBe(0);
+  });
+
+  it('drops a stray end line and ignores markers in code fences', () => {
+    expect(scanMarkers(`x\n${end}\ny`).markdown).toBe('x\ny');
+    const fenced = scanMarkers(`\`\`\`\n${start}\n\`\`\``);
+    expect(fenced.markdown).not.toContain(KEEP_TOKEN);
   });
 });
 

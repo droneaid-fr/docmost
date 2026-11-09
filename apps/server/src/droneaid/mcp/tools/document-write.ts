@@ -11,9 +11,11 @@ import {
 import {
   composeWithKept,
   dropTokens,
+  ignoredRegionEdits,
   KeptReport,
   restoreImageAttrs,
 } from './keep-blocks';
+import { preserveUnchanged } from './preserve-blocks';
 import { liveJson, replaceFragment, withLiveDoc } from './live-doc';
 import {
   claimAttachments,
@@ -119,7 +121,7 @@ export const createDocumentTool = defineTool({
 export const updateDocumentTool = defineTool({
   name: 'update_document',
   title: 'Update Document',
-  description: `Replace a document body with new markdown; the title stays unless you pass title. Unchanged blocks keep their identity, and people editing the page see the change live. ${PAGE_LINK_HINT} ${IMAGE_HINT} Databases are never edited here: a \`<!-- database id=... -->\` line (as read_document shows it) keeps that database at that spot, and a database whose line is missing is kept at the end. Files, videos, embeds and diagrams are kept too: where a line links to them, else after the paragraph they followed, else at the end. Edit databases with the database tools.`,
+  description: `Replace a document body with new markdown; the title stays unless you pass title. Unchanged blocks keep their identity, and people editing the page see the change live. ${PAGE_LINK_HINT} ${IMAGE_HINT} Databases are never edited here: a \`<!-- database id=... -->\` line (as read_document shows it) keeps that database at that spot, and a database whose line is missing is kept at the end. Synced blocks, columns and tabs are kept as they are in the same way: read_document shows each between a \`<!-- <kind> id=... start ... -->\` and a \`<!-- <kind> id=... end -->\` line; keep those two lines where the block should stay; text you change between them is ignored (warned), and a block whose lines are missing is kept at the end. Files, videos, embeds, page breaks and diagrams are kept too: where a line links to them, else after the paragraph they followed, else at the end. Comments, alignment, colours and status badges stay on every paragraph whose text you leave as it is; \`warnings\` lists comments and formatting your rewrites removed. Edit databases with the database tools.`,
   access: 'write',
   audience: 'all',
   inputSchema: z
@@ -146,11 +148,20 @@ export const updateDocumentTool = defineTool({
       });
       const base = ctx.baseUrl;
       let kept: KeptReport[] = [];
+      const warnings = [...parsed.warnings];
       await withLiveDoc(ctx, page.id, (doc) => {
         const current = liveJson(doc);
         const composed = composeWithKept(current, parsed.json, base);
-        replaceFragment(doc, restoreImageAttrs(current, composed.doc, base));
+        const preserved = preserveUnchanged(
+          current,
+          restoreImageAttrs(current, composed.doc, base),
+        );
+        replaceFragment(doc, preserved.doc);
         kept = composed.kept;
+        warnings.push(
+          ...ignoredRegionEdits(current, parsed.regions, base),
+          ...preserved.warnings,
+        );
       });
       await claimAttachments(ctx, parsed.attachmentIds, page);
       // Last editor, contributors, watchers and (optionally) the title, as
@@ -168,7 +179,7 @@ export const updateDocumentTool = defineTool({
         docId: page.id,
         linkedPages: parsed.linkedPages,
         kept,
-        ...(parsed.warnings.length ? { warnings: parsed.warnings } : {}),
+        ...(warnings.length ? { warnings } : {}),
         message: 'Document updated successfully',
       });
     } catch (error) {

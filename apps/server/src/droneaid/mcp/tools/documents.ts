@@ -26,7 +26,7 @@ export const readDocumentTool = defineTool({
   name: 'read_document',
   title: 'Read Document',
   description:
-    'Read a document as markdown (title as the first heading). Links to other pages are rendered as `[Title](<page URL>)`. A database shows as one `<!-- database id=... -->` line.',
+    'Read a document as markdown (title as the first heading). Links to other pages are rendered as `[Title](<page URL>)`. A database shows as one `<!-- database id=... -->` line. A synced block, a column layout or tabs show their content between `<!-- <kind> id=... start ... -->` and `<!-- <kind> id=... end -->` lines; update_document keeps them as they are.',
   access: 'read',
   audience: 'all',
   inputSchema: z.object({ docId: DOC_ID }).strict(),
