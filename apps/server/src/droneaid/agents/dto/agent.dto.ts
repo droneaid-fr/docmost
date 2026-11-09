@@ -5,6 +5,7 @@ import {
   IsString,
   IsUUID,
   Matches,
+  ValidateIf,
   Max,
   MaxLength,
   Min,
@@ -26,20 +27,27 @@ export class CreateAgentDto {
   @IsEmail()
   email?: string;
 
+  /** Bind the agent to this existing space instead of creating one. */
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string;
+
+  @ValidateIf((dto: CreateAgentDto) => !dto.spaceId)
   @IsString()
   @MinLength(2)
   @MaxLength(100)
   @Transform(trim)
-  spaceName: string;
+  spaceName?: string;
 
   // Same rule as core CreateSpaceDto.slug.
+  @ValidateIf((dto: CreateAgentDto) => !dto.spaceId)
   @MinLength(2)
   @MaxLength(100)
   @Matches(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, {
     message:
       'Space slug must start with a letter or number and may contain hyphens and underscores',
   })
-  spaceSlug: string;
+  spaceSlug?: string;
 }
 
 export class CreateAgentTokenDto {

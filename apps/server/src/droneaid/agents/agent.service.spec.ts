@@ -269,6 +269,66 @@ describe('AgentService.createAgent', () => {
     expect(result.spaceSlug).toEqual('agent');
   });
 
+  it('binds the agent to an existing space when spaceId is given', async () => {
+    const insertUser = jest
+      .fn()
+      .mockResolvedValue({ id: 'new-agent', name: 'DA', email: 'a@x' });
+    const createSpace = jest.fn();
+    const addUserToSpace = jest.fn();
+    const insertAgent = jest.fn().mockResolvedValue({ userId: 'new-agent' });
+    const findById = jest.fn().mockResolvedValue({
+      id: 'sp-fr',
+      name: 'DroneAid France',
+      slug: 'droneaid-france',
+      deletedAt: null,
+    });
+    const db = { transaction: () => ({ execute: (fn: any) => fn('trx') }) };
+    const service = new AgentService(
+      db as any,
+      { insertAgent } as any,
+      { findByEmail: jest.fn(), insertUser } as any,
+      { createSpace } as any,
+      { addUserToSpace } as any,
+      { findById } as any,
+    );
+    const result = await service.createAgent({ id: 'admin' } as any, { id: WS } as any, {
+      name: 'DA France agent',
+      spaceId: 'sp-fr',
+    });
+    expect(findById).toHaveBeenCalledWith('sp-fr', WS);
+    expect(createSpace).not.toHaveBeenCalled();
+    expect(insertUser.mock.calls[0][0].email).toEqual(
+      'droneaid-france.agent@agents.invalid',
+    );
+    expect(addUserToSpace).toHaveBeenCalledWith('new-agent', 'sp-fr', 'writer', WS, 'trx');
+    expect(insertAgent.mock.calls[0][0]).toMatchObject({ spaceId: 'sp-fr' });
+    expect(result).toMatchObject({ spaceId: 'sp-fr', spaceSlug: 'droneaid-france' });
+  });
+
+  it('refuses an unknown or deleted spaceId, and a request with no space at all', async () => {
+    const make = (space: any) =>
+      new AgentService(
+        {} as any,
+        {} as any,
+        { findByEmail: jest.fn() } as any,
+        {} as any,
+        {} as any,
+        { findById: jest.fn().mockResolvedValue(space) } as any,
+      );
+    await expect(
+      make(null).createAgent({ id: 'a' } as any, { id: WS } as any, { name: 'n', spaceId: 'x' }),
+    ).rejects.toThrow('Space not found');
+    await expect(
+      make({ id: 'x', deletedAt: new Date() }).createAgent({ id: 'a' } as any, { id: WS } as any, {
+        name: 'n',
+        spaceId: 'x',
+      }),
+    ).rejects.toThrow('Space not found');
+    await expect(
+      make(null).createAgent({ id: 'a' } as any, { id: WS } as any, { name: 'n' }),
+    ).rejects.toThrow('spaceId or both');
+  });
+
   it('refuses an email that already exists', async () => {
     const { service } = makeService({
       userRepo: { findByEmail: jest.fn().mockResolvedValue({ id: 'x' }) },
@@ -281,5 +341,31 @@ describe('AgentService.createAgent', () => {
         spaceSlug: 's1',
       }),
     ).rejects.toThrow('already exists');
+  });
+});
+
+describe('CreateAgentDto', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { plainToInstance } = require('class-transformer');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { validateSync } = require('class-validator');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { CreateAgentDto } = require('./dto/agent.dto');
+  const errors = (body: any) =>
+    validateSync(plainToInstance(CreateAgentDto, body)).map((e: any) => e.property);
+
+  it('still accepts the original body (new space)', () => {
+    expect(errors({ name: 'Agent', spaceName: 'Agent space', spaceSlug: 'agent' })).toEqual([]);
+  });
+
+  it('accepts spaceId without space name and slug', () => {
+    expect(
+      errors({ name: 'Agent', spaceId: '019a6b8e-1b2c-7d3e-8f40-123456789abc' }),
+    ).toEqual([]);
+  });
+
+  it('requires name and slug when no spaceId is given', () => {
+    expect(errors({ name: 'Agent' })).toEqual(['spaceName', 'spaceSlug']);
+    expect(errors({ name: 'Agent', spaceId: 'not-a-uuid' })).toEqual(['spaceId']);
   });
 });

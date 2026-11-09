@@ -9,7 +9,8 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
-import { User, Workspace } from '@docmost/db/types/entity.types';
+import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
+import { Space, User, Workspace } from '@docmost/db/types/entity.types';
 import { SpaceService } from '../../core/space/services/space.service';
 import { SpaceMemberService } from '../../core/space/services/space-member.service';
 import { SpaceRole, UserRole } from '../../common/helpers/types/permission';
@@ -26,11 +27,16 @@ import {
 /** last_used_at is written at most this often per token. */
 export const TOKEN_TOUCH_INTERVAL_MS = 60_000;
 
+/**
+ * Either a new space (`spaceName` + `spaceSlug`, the original form) or an
+ * existing one (`spaceId`), e.g. a space created by the AFFiNE import.
+ */
 export type CreateAgentInput = {
   name: string;
   email?: string;
-  spaceName: string;
-  spaceSlug: string;
+  spaceName?: string;
+  spaceSlug?: string;
+  spaceId?: string;
 };
 
 export type AuthenticatedAgent = {
@@ -64,6 +70,7 @@ export class AgentService {
     private readonly userRepo: UserRepo,
     private readonly spaceService: SpaceService,
     private readonly spaceMemberService: SpaceMemberService,
+    private readonly spaceRepo?: SpaceRepo,
   ) {}
 
   async listAgents(workspaceId: string) {
@@ -82,8 +89,17 @@ export class AgentService {
     workspace: Workspace,
     input: CreateAgentInput,
   ) {
+    const existingSpace = input.spaceId
+      ? await this.findBindableSpace(input.spaceId, workspace.id)
+      : null;
+    if (!existingSpace && !(input.spaceName?.trim() && input.spaceSlug)) {
+      throw new BadRequestException(
+        'Give either spaceId or both spaceName and spaceSlug',
+      );
+    }
+    const slug = existingSpace?.slug ?? input.spaceSlug;
     const email = (
-      input.email?.trim() || `${input.spaceSlug}.agent@agents.invalid`
+      input.email?.trim() || `${slug}.agent@agents.invalid`
     ).toLowerCase();
     const existing = await this.userRepo.findByEmail(email, workspace.id);
     if (existing) {
@@ -105,13 +121,16 @@ export class AgentService {
         trx,
       );
 
-      // The admin who creates the space becomes its admin; the agent writes.
-      const space = await this.spaceService.createSpace(
-        admin,
-        workspace.id,
-        { name: input.spaceName, slug: input.spaceSlug },
-        trx,
-      );
+      // A new space: the admin who creates it becomes its admin. Either way
+      // the agent writes there.
+      const space =
+        existingSpace ??
+        (await this.spaceService.createSpace(
+          admin,
+          workspace.id,
+          { name: input.spaceName, slug: input.spaceSlug },
+          trx,
+        ));
       await this.spaceMemberService.addUserToSpace(
         user.id,
         space.id,
@@ -139,6 +158,19 @@ export class AgentService {
         spaceSlug: space.slug,
       };
     });
+  }
+
+  private async findBindableSpace(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<Space> {
+    const space = this.spaceRepo
+      ? await this.spaceRepo.findById(spaceId, workspaceId)
+      : null;
+    if (!space || space.deletedAt) {
+      throw new NotFoundException('Space not found');
+    }
+    return space;
   }
 
   async mintToken(
