@@ -129,14 +129,29 @@ describeIf('DroneAid MCP (integration)', () => {
     tokenId = minted.data.record.id;
   });
 
-  it('lists the read tools for the agent', async () => {
+  it('lists the agent tools (S3a read, S3b write, S4c database)', async () => {
     const { body } = await rpc(agentToken, 'tools/list');
     expect(body.result.tools.map((t: any) => t.name).sort()).toEqual([
+      'add_database_rows',
+      'add_to_folder',
+      'create_database',
+      'create_document',
+      'create_folder',
       'doc_search',
       'get_document_info',
       'list_documents',
       'list_folders',
+      'move_folder_item',
+      'read_database',
       'read_document',
+      'remove_database_rows',
+      'remove_from_folder',
+      'rename_folder',
+      'update_database_columns',
+      'update_database_rows',
+      'update_document',
+      'update_document_meta',
+      'upload_image',
     ]);
   });
 
