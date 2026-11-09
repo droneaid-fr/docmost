@@ -45,7 +45,7 @@ import {
   readDocJson,
 } from './bundle';
 import { convertDatabase } from './database-convert';
-import { AttachmentInfo, convertMarkdown, PlannedPage } from './content';
+import { AttachmentInfo, convertMarkdown, editorReady, PlannedPage } from './content';
 import { ImportKind, ImportMapRepo } from './import-map.repo';
 import { prepareMarkdown, PrepStats } from './markdown-prep';
 import {
@@ -531,7 +531,7 @@ export class AffineImporter {
       record,
       {
         title: node.title,
-        content: { type: 'doc', content: [{ type: 'paragraph' }] },
+        content: editorReady({ type: 'doc', content: [{ type: 'paragraph' }] }),
         parent,
         position,
         creatorId: space.creator.id,
@@ -544,7 +544,14 @@ export class AffineImporter {
     this.count('folderPages');
   }
 
-  private pageForRef = (ref: string): PlannedPage | null => this.docPage.get(ref) ?? null;
+  /**
+   * An `affine://` doc id, or a planned Docmost page id (markdown-in.ts checks
+   * that an image's page is readable; the import principal can read them all).
+   */
+  private pageForRef = (ref: string): PlannedPage | null =>
+    this.docPage.get(ref) ??
+    [...this.pages.values()].find((p) => p.id === ref) ??
+    null;
 
   private spaceSlugOf = (spaceId: string) =>
     [...this.spaceOf.values()].find((s) => s.id === spaceId)?.slug ?? null;
@@ -696,6 +703,8 @@ export class AffineImporter {
                 mimeType: a.mimeType,
                 fileSize: Number(a.fileSize ?? 0) || null,
                 workspaceId: a.workspaceId,
+                pageId: a.pageId,
+                creatorId: a.creatorId,
               }
             : null;
         },
@@ -858,6 +867,9 @@ export class AffineImporter {
           title: ready ? tr.title : null,
           content: translated,
           sourceHash: ready ? hash : null,
+          // Current by time (S5 serves it without re-hashing) as long as the
+          // page is not edited after the import.
+          sourceUpdatedAt: ready ? new Date(doc.updatedAt) : null,
           translatedAt: ready ? new Date() : null,
         } as any)
         .onConflict((oc) => oc.columns(['pageId', 'lang']).doNothing())

@@ -1,4 +1,4 @@
-import { DatabaseData, databaseToJson } from '@docmost/editor-ext';
+import { DatabaseData, databaseToJson, generateNodeId } from '@docmost/editor-ext';
 import { jsonToNode } from '../../collaboration/collaboration.util';
 import { fileUrl, markdownToDoc } from '../mcp/tools/markdown-in';
 import { KEEP_TOKEN } from '../mcp/tools/keep-blocks';
@@ -31,6 +31,9 @@ export type AttachmentInfo = {
   mimeType: string | null;
   fileSize: number | null;
   workspaceId: string;
+  /** markdown-in.ts accepts an image only if its page is readable. */
+  pageId?: string | null;
+  creatorId?: string | null;
 };
 
 export type ConvertDeps = {
@@ -38,7 +41,7 @@ export type ConvertDeps = {
   workspaceId: string;
   /** Mention author (`data-creator-id`): the page's creator. */
   userId: string;
-  /** AFFiNE doc id (from `affine://`) -> planned page. */
+  /** AFFiNE doc id (from `affine://`) or planned page id -> planned page. */
   pageFor: (ref: string) => PlannedPage | null;
   spaceSlug: (spaceId: string) => string | null;
   attachment: (id: string) => Promise<AttachmentInfo | null>;
@@ -99,6 +102,32 @@ export function replaceTokens(
   return result;
 }
 
+const ID_TYPES = new Set(['paragraph', 'heading']);
+
+/**
+ * The document as the editor would leave it on first open, so that opening
+ * an imported page changes nothing (no save, no new `updated_at`, its
+ * translations stay current): every attribute explicit (the client sets
+ * `dir` where it is missing), an id on every paragraph and heading (the
+ * client's UniqueID), and an empty paragraph after a last block that is not
+ * one (TrailingNode). Pure apart from fresh ids. Throws on invalid content.
+ */
+export function editorReady(doc: any, newId: () => string = generateNodeId): any {
+  const json = jsonToNode(doc).toJSON();
+  if (json.content?.at(-1)?.type !== 'paragraph') {
+    json.content = [...(json.content ?? []), jsonToNode({ type: 'paragraph' }).toJSON()];
+  }
+  const visit = (node: any) => {
+    if (ID_TYPES.has(node?.type) && node.attrs && !node.attrs.id) {
+      node.attrs = { ...node.attrs, id: newId() };
+    }
+    (node?.content ?? []).forEach(visit);
+  };
+  visit(json);
+  jsonToNode(json).check();
+  return json;
+}
+
 export async function convertMarkdown(
   markdown: string,
   title: string | null,
@@ -155,9 +184,8 @@ export async function convertMarkdown(
     warnings.push(`database ${id} had no marker; appended at the end`);
   }
 
-  jsonToNode(json).check();
   return {
-    json,
+    json: editorReady(json),
     attachmentIds: [...attachmentIds],
     linkedPageIds: parsed.linkedPages.map((p) => p.docId),
     warnings,

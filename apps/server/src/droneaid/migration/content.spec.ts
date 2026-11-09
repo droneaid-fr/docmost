@@ -1,5 +1,5 @@
 import { createDatabaseData } from '@docmost/editor-ext';
-import { convertMarkdown, replaceTokens } from './content';
+import { convertMarkdown, editorReady, replaceTokens } from './content';
 import { prepareMarkdown } from './markdown-prep';
 
 jest.mock('@sindresorhus/slugify', () => ({
@@ -10,8 +10,8 @@ jest.mock('@sindresorhus/slugify', () => ({
 const ATT = '0190f2c4-0000-7000-8000-000000000001';
 const PDF = '0190f2c4-0000-7000-8000-000000000002';
 const attachments: Record<string, any> = {
-  [ATT]: { id: ATT, fileName: 'image-1.png', mimeType: 'image/png', fileSize: 10, workspaceId: 'ws' },
-  [PDF]: { id: PDF, fileName: 'Offer.pdf', mimeType: 'application/pdf', fileSize: 99, workspaceId: 'ws' },
+  [ATT]: { id: ATT, fileName: 'image-1.png', mimeType: 'image/png', fileSize: 10, workspaceId: 'ws', pageId: 'page-a' },
+  [PDF]: { id: PDF, fileName: 'Offer.pdf', mimeType: 'application/pdf', fileSize: 99, workspaceId: 'ws', pageId: 'page-a' },
 };
 const pages: Record<string, any> = {
   docA: { id: 'page-a', slugId: 'slugA', title: 'Target List', spaceId: 'sp1' },
@@ -21,7 +21,8 @@ const deps = {
   baseUrl: '',
   workspaceId: 'ws',
   userId: 'u1',
-  pageFor: (ref: string) => pages[ref] ?? null,
+  pageFor: (ref: string) =>
+    pages[ref] ?? Object.values(pages).find((p: any) => p.id === ref) ?? null,
   spaceSlug: (id: string) => ({ sp1: 'france', sp2: 'rnd' })[id] ?? null,
   attachment: async (id: string) => attachments[id] ?? null,
 };
@@ -93,7 +94,8 @@ describe('convertMarkdown', () => {
       databases: new Map([[db.id, db]]),
       blobAttachment: () => null,
     });
-    expect(result.json.content.at(-1).type).toBe('droneaidDatabase');
+    expect(result.json.content.at(-2).type).toBe('droneaidDatabase');
+    expect(result.json.content.at(-1).type).toBe('paragraph'); // editor's trailing node
     expect(result.warnings[0]).toContain('no marker');
   });
 
@@ -101,5 +103,21 @@ describe('convertMarkdown', () => {
     const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'DRONEAIDMIG:youtube:x' }] }] };
     expect(replaceTokens(doc, () => null)).toEqual({ type: 'doc', content: [{ type: 'paragraph' }] });
     expect(replaceTokens(doc, () => undefined)).toEqual(doc);
+  });
+});
+
+describe('editorReady', () => {
+  it('fills attributes, ids and the trailing paragraph like the editor does', () => {
+    let n = 0;
+    const out = editorReady(
+      { type: 'doc', content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'H' }] }, { type: 'mathBlock', attrs: { text: 'x' } }] },
+      () => `id${++n}`,
+    );
+    expect(out.attrs).toEqual({ dir: 'auto' });
+    expect(out.content[0].attrs).toMatchObject({ id: 'id1', level: 2, dir: 'auto' });
+    expect(out.content[1].attrs).toMatchObject({ text: 'x', dir: 'auto' });
+    expect(out.content[2]).toMatchObject({ type: 'paragraph', attrs: { id: 'id2' } });
+    // idempotent apart from ids already present
+    expect(editorReady(out, () => 'never')).toEqual(out);
   });
 });

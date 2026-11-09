@@ -218,6 +218,18 @@ export type Bundle = {
   workspaces: LoadedWorkspace[];
 };
 
+/**
+ * Titles as Docmost's title editor keeps them: trimmed. An untrimmed title
+ * ("Getting Started ") is rewritten, and the page saved, on first open.
+ */
+export function pageTitle(title: string | null | undefined): string {
+  return (title ?? '').trim();
+}
+
+function trimFolder(folder: FolderNode): FolderNode {
+  return { ...folder, name: pageTitle(folder.name), folders: folder.folders.map(trimFolder) };
+}
+
 async function readJson<T>(file: string): Promise<T> {
   return JSON.parse(await fs.readFile(file, 'utf8')) as T;
 }
@@ -263,12 +275,21 @@ export async function loadBundle(dir: string): Promise<Bundle> {
       .sort();
     const docs: BundleDoc[] = [];
     for (const docId of docIds) {
-      docs.push(await readJson(path.join(wsDir, 'docs', docId, 'doc.json')));
+      const doc: BundleDoc = await readJson(path.join(wsDir, 'docs', docId, 'doc.json'));
+      docs.push({
+        ...doc,
+        title: pageTitle(doc.title),
+        translations: (doc.translations ?? []).map((tr) => ({
+          ...tr,
+          title: tr.title === null ? null : pageTitle(tr.title),
+        })),
+      });
     }
+    const folders: BundleFolders = await readJson(path.join(wsDir, 'folders.json'));
     const blobs = await readJson<any>(path.join(wsDir, 'blobs.json'));
     workspaces.push({
       workspace: await readJson(path.join(wsDir, 'workspace.json')),
-      folders: await readJson(path.join(wsDir, 'folders.json')),
+      folders: { ...folders, tree: folders.tree.map(trimFolder) },
       grants: await readJson(path.join(wsDir, 'doc-grants.json')),
       blobs: Array.isArray(blobs) ? blobs : blobs.blobs,
       docs,

@@ -71,3 +71,13 @@ describe('folderCreatedAt', () => {
     expect(folderCreatedAt({ ...tree, children: [] }, () => undefined)).toBeNull();
   });
 });
+
+describe('pageTitle', () => {
+  it('trims like the title editor', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { pageTitle } = require('./bundle');
+    expect(pageTitle(' Debrief')).toBe('Debrief');
+    expect(pageTitle('Getting Started ')).toBe('Getting Started');
+    expect(pageTitle(null)).toBe('');
+  });
+});
