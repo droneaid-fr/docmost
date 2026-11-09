@@ -3,9 +3,16 @@ import { AgentsModule } from './agents/agents.module';
 import { McpModule } from './mcp/mcp.module';
 import { GoogleAuthModule } from './google-auth/google-auth.module';
 import { SignupRulesModule } from './signup-rules/signup-rules.module';
+import { TranslateModule } from './translate/translate.module';
 
 /** Root of every DroneAid server module; imported once by AppModule. */
 @Module({
-  imports: [AgentsModule, McpModule, GoogleAuthModule, SignupRulesModule],
+  imports: [
+    AgentsModule,
+    McpModule,
+    GoogleAuthModule,
+    SignupRulesModule,
+    TranslateModule,
+  ],
 })
 export class DroneaidModule {}

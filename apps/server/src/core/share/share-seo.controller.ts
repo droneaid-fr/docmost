@@ -1,4 +1,13 @@
-import { Controller, Get, Param, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  Optional,
+  Param,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ShareService } from './share.service';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { join } from 'path';
@@ -10,6 +19,11 @@ import { Workspace } from '@docmost/db/types/entity.types';
 import { htmlEscape } from '../../common/helpers/html-escaper';
 import { getWorkspaceDefaultLocale } from '../workspace/workspace.util';
 import { DEFAULT_LOCALE } from '../workspace/workspace.constants';
+// DroneAid: translated title for ?lang= (apps/server/src/droneaid/translate)
+import {
+  DRONEAID_SHARE_TITLES,
+  type ShareTitleTranslations,
+} from '../../droneaid/translate/share-title';
 
 @Controller('share')
 export class ShareSeoController {
@@ -17,6 +31,9 @@ export class ShareSeoController {
     private readonly shareService: ShareService,
     private workspaceRepo: WorkspaceRepo,
     private environmentService: EnvironmentService,
+    @Optional()
+    @Inject(DRONEAID_SHARE_TITLES)
+    private readonly droneaidTitles?: ShareTitleTranslations,
   ) {}
 
   /*
@@ -28,6 +45,7 @@ export class ShareSeoController {
     @Req() req: FastifyRequest,
     @Param('shareId') shareId: string,
     @Param('pageSlug') pageSlug: string,
+    @Query('lang') queryLang?: string,
   ) {
     // Nestjs does not to apply middlewares to paths excluded from the global /api prefix
     // https://github.com/nestjs/nest/issues/9124
@@ -64,6 +82,7 @@ export class ShareSeoController {
 
       let title: string;
       let searchIndexing = false;
+      let translatedLang: string | undefined;
       try {
         const shared = await this.shareService.getSharedPage(
           { pageId },
@@ -79,6 +98,13 @@ export class ShareSeoController {
         }
         title = shared.page.title;
         searchIndexing = shared.share.searchIndexing;
+        const translated = await this.droneaidTitles
+          ?.translatedTitle(shared.page.id, queryLang)
+          .catch(() => null);
+        if (translated) {
+          title = translated.title;
+          translatedLang = translated.lang;
+        }
       } catch (err) {
         return this.sendIndex(indexFilePath, res);
       }
@@ -97,7 +123,8 @@ export class ShareSeoController {
         .filter(Boolean)
         .join('\n    ');
 
-      const lang = getWorkspaceDefaultLocale(workspace) ?? DEFAULT_LOCALE;
+      const lang =
+        translatedLang ?? getWorkspaceDefaultLocale(workspace) ?? DEFAULT_LOCALE;
 
       const html = fs.readFileSync(indexFilePath, 'utf8');
       const transformedHtml = html

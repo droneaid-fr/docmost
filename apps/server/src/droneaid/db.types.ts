@@ -39,10 +39,29 @@ export interface DroneaidSignupRules {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface DroneaidPageTranslations {
+  id: Generated<string>;
+  workspaceId: string;
+  pageId: string;
+  lang: string;
+  sourceLang: string;
+  status: Generated<string>;
+  title: string | null;
+  content: unknown | null;
+  sourceHash: string | null;
+  error: string | null;
+  attempts: Generated<number>;
+  availableAt: Generated<Timestamp>;
+  translatedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface DroneaidTables {
   droneaidAgents: DroneaidAgents;
   droneaidAgentTokens: DroneaidAgentTokens;
   droneaidSignupRules: DroneaidSignupRules;
+  droneaidPageTranslations: DroneaidPageTranslations;
 }
 
 export type DroneaidDB = Kysely<DbInterface & DroneaidTables>;
@@ -51,6 +70,7 @@ export type DroneaidTransaction = Transaction<DbInterface & DroneaidTables>;
 export type DroneaidAgent = Selectable<DroneaidAgents>;
 export type DroneaidAgentToken = Selectable<DroneaidAgentTokens>;
 export type DroneaidSignupRule = Selectable<DroneaidSignupRules>;
+export type DroneaidPageTranslation = Selectable<DroneaidPageTranslations>;
 
 export function droneaidDb(db: Kysely<DbInterface>): DroneaidDB {
   return db as unknown as DroneaidDB;
