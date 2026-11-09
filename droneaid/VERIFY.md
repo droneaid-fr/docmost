@@ -71,6 +71,13 @@ Tick each line; anything unexpected goes into the Phase 7 notes.
 - [ ] **Read-only elsewhere**: ask the agent to edit a page in DroneAid Academy → refused (it has no access there).
 - [ ] Known: unused uploads from `upload_image` are not cleaned up (S3b).
 
+## Enterprise code removed (S8)
+
+- [ ] **Settings sidebar**: Account shows Profile and Preferences; Workspace shows General, Members, Groups, Spaces, Public sharing, Integrations, Agents, Sign-up rules. No API keys, Security & SSO, Verified pages, API management, AI settings, Audit logs or License & Edition; `/settings/security` shows the 404 page.
+- [ ] **Share**: the page header's Share opens a small popover (Share to web, link with copy and open, Include sub-pages, Search engine indexing). Turning it on makes **Translations** appear beside it at once; turning it off hides it.
+- [ ] **No upgrade prompts**: the slash menu has Database but no Base or Kanban; the import dialog has no DOCX, PDF or Confluence; the export dialog has no Word; the comment menu has no Resolve; the space menu has no Templates.
+- [ ] Known: an embedded Docmost Base (none among the migrated pages) shows "Base is not available in this edition."
+
 ## Images and deployment (S1, S7)
 
 - [ ] `docker images | grep docmost-droneaid` → `local` (amd64) and `local-arm64` exist; the stack runs `docmost-droneaid:local`.
