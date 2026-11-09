@@ -198,6 +198,17 @@ export class AgentService {
     return { agent, user, tokenId: row.id };
   }
 
+  /**
+   * Cheap pre-check (one indexed lookup, no writes) used before the MCP
+   * route reads a request body; `authenticate` still runs afterwards.
+   */
+  async isLiveToken(token: string): Promise<boolean> {
+    if (!isWellFormedAgentToken(token)) return false;
+    const row = await this.agentRepo.findTokenByHash(hashAgentToken(token));
+    if (!row || row.revokedAt) return false;
+    return !row.expiresAt || new Date(row.expiresAt) > new Date();
+  }
+
   async isAgent(userId: string, workspaceId: string): Promise<boolean> {
     return !!(await this.agentRepo.findAgent(userId, workspaceId));
   }

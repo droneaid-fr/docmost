@@ -10,6 +10,7 @@ import { McpAuthGuard } from './mcp-auth.guard';
 import { McpBodyLimit } from './mcp-body-limit';
 import { McpController } from './mcp.controller';
 import { McpHttpService } from './mcp-http.service';
+import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolDeps } from './tools/context';
 
 @Module({
@@ -24,6 +25,7 @@ import { McpToolDeps } from './tools/context';
   providers: [
     McpBodyLimit,
     McpAuthGuard,
+    McpThrottlerGuard,
     McpHttpService,
     McpToolDeps,
     // ExportModule does not export its service; it is stateless, so we keep

@@ -72,24 +72,18 @@ export class McpHttpService implements OnModuleDestroy {
   }
 }
 
+/**
+ * The web Request the SDK sees. The body is already parsed (and handed over
+ * as `parsedBody`, which the SDK then uses instead of reading the stream),
+ * so the Request carries none: no second copy of a 24 MiB upload.
+ */
 function toWebRequest(req: FastifyRequest, signal: AbortSignal): Request {
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue;
+    if (value === undefined || key === 'content-length') continue;
     if (Array.isArray(value)) value.forEach((v) => headers.append(key, v));
     else headers.set(key, String(value));
   }
   const url = `${req.protocol}://${req.hostname}${req.url}`;
-  const hasBody = req.method === 'POST';
-  const raw = (req as any).rawBody as Buffer | undefined;
-  return new Request(url, {
-    method: req.method,
-    headers,
-    signal,
-    body: hasBody
-      ? raw
-        ? new Uint8Array(raw)
-        : JSON.stringify(req.body ?? null)
-      : undefined,
-  });
+  return new Request(url, { method: req.method, headers, signal });
 }
