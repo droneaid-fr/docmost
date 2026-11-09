@@ -2,11 +2,13 @@ import type { Editor } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import {
   CellValue,
+  DatabaseViewState,
   DATABASE_CELL_NODE,
   DATABASE_COLUMN_NODE,
   DATABASE_NODE,
   DATABASE_ROW_NODE,
   DatabaseColumn,
+  isEmptyView,
   newDatabaseId,
   optionsWith,
   valueLabels,
@@ -20,7 +22,7 @@ import {
 
 export type GetPos = () => number | undefined;
 
-interface Located {
+export interface Located {
   pos: number;
   node: PMNode;
 }
@@ -33,7 +35,7 @@ export function locateDatabase(editor: Editor, getPos: GetPos): Located | null {
   return node?.type.name === DATABASE_NODE ? { pos, node } : null;
 }
 
-function childrenOf(parent: Located): Located[] {
+export function childrenOf(parent: Located): Located[] {
   const list: Located[] = [];
   parent.node.forEach((node, offset) => {
     list.push({ pos: parent.pos + 1 + offset, node });
@@ -41,19 +43,19 @@ function childrenOf(parent: Located): Located[] {
   return list;
 }
 
-function findRow(db: Located, rowId: string): Located | undefined {
+export function findRow(db: Located, rowId: string): Located | undefined {
   return childrenOf(db).find(
     (c) => c.node.type.name === DATABASE_ROW_NODE && c.node.attrs.id === rowId,
   );
 }
 
-function findColumn(db: Located, columnId: string): Located | undefined {
+export function findColumn(db: Located, columnId: string): Located | undefined {
   return childrenOf(db).find(
     (c) => c.node.type.name === DATABASE_COLUMN_NODE && c.node.attrs.id === columnId,
   );
 }
 
-function dispatch(editor: Editor, tr: any) {
+export function dispatch(editor: Editor, tr: any) {
   editor.view.dispatch(tr);
 }
 
@@ -88,7 +90,8 @@ export function setCellValue(
     tr.insert(row.pos + row.node.nodeSize - 1, cell);
   }
 
-  const labels = valueLabels(value);
+  const selectable = column.type === "select" || column.type === "multi-select";
+  const labels = selectable ? valueLabels(value) : [];
   if (labels.length) {
     const options = optionsWith(column.options, labels);
     const colNode = findColumn(db, column.id);
@@ -127,4 +130,58 @@ export function setDatabaseTitle(editor: Editor, getPos: GetPos, title: string) 
   const db = locateDatabase(editor, getPos);
   if (!db || db.node.attrs.title === title) return;
   dispatch(editor, editor.state.tr.setNodeAttribute(db.pos, "title", title));
+}
+
+/** Deletes several rows in one transaction. */
+export function removeRows(editor: Editor, getPos: GetPos, rowIds: string[]) {
+  const db = locateDatabase(editor, getPos);
+  if (!db || !rowIds.length) return;
+  const ids = new Set(rowIds);
+  const rows = childrenOf(db).filter(
+    (c) => c.node.type.name === DATABASE_ROW_NODE && ids.has(c.node.attrs.id),
+  );
+  if (!rows.length) return;
+  const { tr } = editor.state;
+  for (const row of rows.reverse()) tr.delete(row.pos, row.pos + row.node.nodeSize);
+  dispatch(editor, tr);
+}
+
+/**
+ * Moves a row before or after another row (document order). The row is
+ * re-inserted, so a concurrent edit by someone else to that row while it
+ * moves is lost; the move itself is one transaction.
+ */
+export function moveRow(
+  editor: Editor,
+  getPos: GetPos,
+  rowId: string,
+  targetRowId: string,
+  place: "before" | "after",
+) {
+  if (rowId === targetRowId) return;
+  const db = locateDatabase(editor, getPos);
+  if (!db) return;
+  const row = findRow(db, rowId);
+  const target = findRow(db, targetRowId);
+  if (!row || !target) return;
+  const at = place === "before" ? target.pos : target.pos + target.node.nodeSize;
+  if (at === row.pos || at === row.pos + row.node.nodeSize) return;
+  const { tr } = editor.state;
+  tr.insert(at, row.node);
+  const from = tr.mapping.map(row.pos, 1);
+  tr.delete(from, from + row.node.nodeSize);
+  dispatch(editor, tr);
+}
+
+/** Stores the shared sort and filter state on the database node. */
+export function setDatabaseView(
+  editor: Editor,
+  getPos: GetPos,
+  view: DatabaseViewState,
+) {
+  const db = locateDatabase(editor, getPos);
+  if (!db) return;
+  const next = isEmptyView(view) ? null : view;
+  if (JSON.stringify(db.node.attrs.view ?? null) === JSON.stringify(next)) return;
+  dispatch(editor, editor.state.tr.setNodeAttribute(db.pos, "view", next));
 }

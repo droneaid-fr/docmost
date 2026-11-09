@@ -58,6 +58,19 @@ describe("database commands", () => {
     expect(read().rows[0].cells[data.columns[1].id]).toBe("Open");
   });
 
+  it("never stores options on a non-select column", () => {
+    const { getPos } = setup();
+    const data = readDatabaseNode(editor.state.doc.nodeAt(getPos()));
+    setCellValue(editor, getPos, data.rows[0].id, data.columns[0], "plain text");
+    let options: unknown = null;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "droneaidDatabaseColumn" && node.attrs.id === data.columns[0].id) {
+        options = node.attrs.options;
+      }
+    });
+    expect(options).toEqual([]);
+  });
+
   it("adds and removes rows, and sets the title", () => {
     const { getPos, read } = setup();
     const id = addRow(editor, getPos);
