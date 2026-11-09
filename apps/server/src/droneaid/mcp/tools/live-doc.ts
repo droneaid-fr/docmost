@@ -24,7 +24,8 @@ export async function withLiveDoc<T>(
 ): Promise<T> {
   const documentName = `page.${pageId}`;
   const gateway = ctx.deps.collaborationGateway;
-  if (!ctx.deps.environmentService.isCollabDisableRedis()) {
+  const locked = !ctx.deps.environmentService.isCollabDisableRedis();
+  if (locked) {
     try {
       await gateway.lockDocument(documentName);
     } catch {
@@ -33,9 +34,18 @@ export async function withLiveDoc<T>(
       );
     }
   }
-  const connection = await gateway.openDirectConnection(documentName, {
-    user: ctx.user,
-  });
+  let connection: Awaited<ReturnType<typeof gateway.openDirectConnection>>;
+  try {
+    connection = await gateway.openDirectConnection(documentName, {
+      user: ctx.user,
+    });
+  } catch (err) {
+    // The doc never loaded, so afterUnloadDocument will not release the lock
+    // and its renewal interval would run forever. Once connected, the normal
+    // disconnect → unload path releases it.
+    if (locked) await gateway.releaseLock(documentName).catch(() => {});
+    throw err;
+  }
   let result: T;
   try {
     await connection.transact((doc: Y.Doc) => {
