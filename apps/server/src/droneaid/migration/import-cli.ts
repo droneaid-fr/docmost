@@ -98,6 +98,10 @@ async function main() {
     new FastifyAdapter(),
     { logger: ['error', 'warn'] },
   );
+  // Same prefix as main.ts. Without it a root controller's GET '' lands on '/',
+  // which StaticModule also registers when the client is built (as in the
+  // image): Fastify then refuses the duplicate route and the CLI dies.
+  app.setGlobalPrefix('api');
   await app.init();
   let code = 0;
   try {
