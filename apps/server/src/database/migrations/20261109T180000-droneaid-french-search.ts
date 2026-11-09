@@ -20,8 +20,23 @@ function pagesTrigger(config: string) {
   `;
 }
 
-// Fires the BEFORE UPDATE trigger on every row, which recomputes tsv.
-const rebuildPagesTsv = sql`UPDATE pages SET title = title`;
+// Fires the BEFORE UPDATE trigger, which recomputes tsv, on every page not in
+// the trash. Trashed pages are skipped: core search filters
+// `deleted_at IS NULL` in every query (SearchService), and restoring a page is
+// an UPDATE, so the trigger (BEFORE INSERT OR UPDATE, any column) rebuilds its
+// tsv then.
+//
+// Cost: one statement that rewrites every live page row (a new row version,
+// full tsvector recomputation, index updates) in the boot transaction;
+// production migrations run on boot. That is fine for our ~100 pages. On a
+// large instance (tens of thousands of pages, megabytes of text each) expect
+// minutes of boot time, row locks on pages for the duration and table bloat
+// until autovacuum; batch it by id range there instead.
+//
+// Only `pages.tsv` is switched to French. The other full-text columns keep
+// upstream's `english` config: `attachments.tsv`, `ai_chat_messages.tsv`
+// and `templates.tsv`.
+const rebuildPagesTsv = sql`UPDATE pages SET title = title WHERE deleted_at IS NULL`;
 
 export async function up(db: Kysely<any>): Promise<void> {
   await sql`DROP TEXT SEARCH CONFIGURATION IF EXISTS droneaid_search`.execute(db);

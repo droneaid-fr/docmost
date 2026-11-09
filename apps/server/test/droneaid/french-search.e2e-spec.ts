@@ -10,6 +10,7 @@ import { CamelCasePlugin, Kysely, sql } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
 import { SearchService } from '../../src/core/search/search.service';
+import { up as frenchSearchUp } from '../../src/database/migrations/20261109T180000-droneaid-french-search';
 
 // The repos are stubbed below; mocking their modules keeps their ESM-only
 // imports (uuid) out of the e2e transform.
@@ -125,5 +126,59 @@ describe('French page search (droneaid)', () => {
       const [hit] = await search('subventions');
       expect(hit.highlight).toMatch(/<b>subvention<\/b>/i);
     });
+  });
+
+  it('the migration rebuilds live pages only; a restored page gets its tsv back', async () => {
+    await db
+      .transaction()
+      .execute(async (trx) => {
+        const ws = await trx
+          .insertInto('workspaces')
+          .values({ name: 'fr-migration-test' })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        const space = await trx
+          .insertInto('spaces')
+          .values({ name: 'FRM', slug: `frm-${Date.now()}`, workspaceId: ws.id })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        const [live, trashed] = await trx
+          .insertInto('pages')
+          .values(
+            ['Vivante', 'Corbeille'].map((title, i) => ({
+              title,
+              textContent: 'des subventions',
+              slugId: `frm${Date.now()}${i}`,
+              spaceId: space.id,
+              workspaceId: ws.id,
+              deletedAt: i === 1 ? new Date() : null,
+            })),
+          )
+          .returning('id')
+          .execute();
+        // Simulate rows indexed before the migration: no tsv at all.
+        await sql`ALTER TABLE pages DISABLE TRIGGER pages_tsvector_update`.execute(trx);
+        await sql`UPDATE pages SET tsv = NULL WHERE space_id = ${space.id}`.execute(trx);
+        await sql`ALTER TABLE pages ENABLE TRIGGER pages_tsvector_update`.execute(trx);
+
+        await frenchSearchUp(trx);
+
+        const tsv = async (id: string) =>
+          (
+            await sql<{ tsv: string | null }>`SELECT tsv::text AS tsv FROM pages WHERE id = ${id}`.execute(trx)
+          ).rows[0].tsv;
+        expect(await tsv(live.id)).toContain('subvent');
+        expect(await tsv(trashed.id)).toBeNull();
+        await trx
+          .updateTable('pages')
+          .set({ deletedAt: null })
+          .where('id', '=', trashed.id)
+          .execute();
+        expect(await tsv(trashed.id)).toContain('subvent');
+        throw new Rollback();
+      })
+      .catch((err) => {
+        if (!(err instanceof Rollback)) throw err;
+      });
   });
 });
