@@ -208,6 +208,22 @@ const json = (r: any) => JSON.parse(r.content[0].text);
 describe('tool registry', () => {
   it('declares access and audience on every tool; S3a tools are read-only and agent-callable', () => {
     expect(ALL_TOOLS.map((t) => t.name).sort()).toEqual([
+      'add_to_folder',
+      'create_document',
+      'create_folder',
+      'doc_search',
+      'get_document_info',
+      'list_documents',
+      'list_folders',
+      'move_folder_item',
+      'read_document',
+      'remove_from_folder',
+      'rename_folder',
+      'update_document',
+      'update_document_meta',
+      'upload_image',
+    ]);
+    const reads = new Set([
       'doc_search',
       'get_document_info',
       'list_documents',
@@ -215,7 +231,7 @@ describe('tool registry', () => {
       'read_document',
     ]);
     for (const tool of ALL_TOOLS) {
-      expect(tool.access).toBe('read');
+      expect(tool.access).toBe(reads.has(tool.name) ? 'read' : 'write');
       expect(tool.audience).toBe('all');
     }
   });

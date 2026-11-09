@@ -1,4 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QueueName } from '../../../integrations/queue/constants';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
@@ -16,6 +19,11 @@ import { PageService } from '../../../core/page/services/page.service';
 import { SearchService } from '../../../core/search/search.service';
 import { ExportService } from '../../../integrations/export/export.service';
 import { DomainService } from '../../../integrations/environment/domain.service';
+import { EnvironmentService } from '../../../integrations/environment/environment.service';
+import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
+import { AttachmentService } from '../../../core/attachment/services/attachment.service';
+import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
+import { WsService } from '../../../ws/ws.service';
 import type { McpPrincipal } from '../mcp-auth.guard';
 import { markdownLink, pageUrl } from './page-url';
 
@@ -34,6 +42,14 @@ export class McpToolDeps {
     readonly searchService: SearchService,
     readonly exportService: ExportService,
     readonly domainService: DomainService,
+    // Write tools (S3b): content goes through the live collaboration doc,
+    // files through core's attachment service.
+    readonly collaborationGateway: CollaborationGateway,
+    readonly environmentService: EnvironmentService,
+    readonly attachmentService: AttachmentService,
+    readonly attachmentRepo: AttachmentRepo,
+    readonly wsService: WsService,
+    @InjectQueue(QueueName.GENERAL_QUEUE) readonly generalQueue: Queue,
   ) {}
 }
 
