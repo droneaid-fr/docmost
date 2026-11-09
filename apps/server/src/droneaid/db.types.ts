@@ -59,11 +59,21 @@ export interface DroneaidPageTranslations {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface DroneaidImportMap {
+  workspaceId: string;
+  kind: string;
+  sourceId: string;
+  targetId: string;
+  bundleSha256: string;
+  createdAt: Generated<Timestamp>;
+}
+
 export interface DroneaidTables {
   droneaidAgents: DroneaidAgents;
   droneaidAgentTokens: DroneaidAgentTokens;
   droneaidSignupRules: DroneaidSignupRules;
   droneaidPageTranslations: DroneaidPageTranslations;
+  droneaidImportMap: DroneaidImportMap;
 }
 
 export type DroneaidDB = Kysely<DbInterface & DroneaidTables>;
