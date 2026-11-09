@@ -23,6 +23,7 @@ import {
   GoogleRefusalCode,
 } from './google-auth.decision';
 import { SignupRulesService } from '../signup-rules/signup-rules.service';
+import { droneaidDb } from '../db.types';
 import { GoogleSignupSetting } from '../signup-rules/google-signup.setting';
 
 export type GoogleSignInResult =
@@ -86,10 +87,20 @@ export class GoogleAuthService {
       ? await this.findPendingInvitation(claims.email, workspace.id)
       : null;
 
+    const agentIds = await this.agentUserIds(
+      [linkedUser?.id, userByEmail?.id],
+      workspace.id,
+    );
     const decision = decideGoogleSignIn({
       claims,
-      linkedUser,
-      userByEmail,
+      linkedUser: linkedUser && {
+        ...linkedUser,
+        isAgent: agentIds.has(linkedUser.id),
+      },
+      userByEmail: userByEmail && {
+        ...userByEmail,
+        isAgent: agentIds.has(userByEmail.id),
+      },
       userByEmailLinkedSub,
       allowSignup: provider.allowSignup,
       allowedByRules,
@@ -100,7 +111,7 @@ export class GoogleAuthService {
     switch (decision.action) {
       case 'refuse':
         this.logger.log(
-          `Google sign-in refused (${decision.code}) for ${claims.email ?? claims.sub}`,
+          `Google sign-in refused (${decision.code}${agentIds.size ? ', agent account' : ''}) for ${claims.email ?? claims.sub}`,
         );
         return { ok: false, code: decision.code };
 
@@ -137,6 +148,22 @@ export class GoogleAuthService {
         return this.startSession(user, workspace.id, true);
       }
     }
+  }
+
+  /** Which of these users are MCP agents (`droneaid_agents` rows). */
+  private async agentUserIds(
+    userIds: (string | undefined)[],
+    workspaceId: string,
+  ): Promise<Set<string>> {
+    const ids = userIds.filter((id): id is string => !!id);
+    if (!ids.length) return new Set();
+    const rows = await droneaidDb(this.db)
+      .selectFrom('droneaidAgents')
+      .select('userId')
+      .where('userId', 'in', ids)
+      .where('workspaceId', '=', workspaceId)
+      .execute();
+    return new Set(rows.map((row) => row.userId));
   }
 
   private async findLinkedUser(

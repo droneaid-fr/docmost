@@ -143,6 +143,22 @@ describe('decideGoogleSignIn', () => {
     });
   });
 
+  describe('agent accounts', () => {
+    it('never signs in as an agent linked to this Google account', () => {
+      expect(
+        decideGoogleSignIn(base({ linkedUser: user({ isAgent: true }) })),
+      ).toEqual({ action: 'refuse', code: 'account_disabled' });
+    });
+
+    it('never links Google to an agent found by email', () => {
+      expect(
+        decideGoogleSignIn(
+          base({ userByEmail: user({ isAgent: true }), allowSignup: true }),
+        ),
+      ).toEqual({ action: 'refuse', code: 'account_disabled' });
+    });
+  });
+
   describe('unknown email', () => {
     it('signs up when a rule matches, lower-casing the email', () => {
       expect(decideGoogleSignIn(base())).toEqual({

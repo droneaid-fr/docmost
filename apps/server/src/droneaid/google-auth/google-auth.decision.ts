@@ -26,6 +26,8 @@ export interface DecisionUser {
   email: string;
   deactivatedAt?: Date | null;
   deletedAt?: Date | null;
+  /** An MCP agent account (`droneaid_agents`): never signs in with Google. */
+  isAgent?: boolean;
 }
 
 export interface DecisionInput {
@@ -64,8 +66,13 @@ export type Decision =
     }
   | { action: 'refuse'; code: GoogleRefusalCode };
 
+/**
+ * Agent accounts authenticate with their agent token only. They are refused
+ * like a disabled account, so Google can neither sign in as an agent nor link
+ * a Google account to one (whatever its email).
+ */
 function isDisabled(user: DecisionUser): boolean {
-  return !!(user.deactivatedAt || user.deletedAt);
+  return !!(user.deactivatedAt || user.deletedAt || user.isAgent);
 }
 
 /** Google sends a boolean; some providers send the string "true". */
