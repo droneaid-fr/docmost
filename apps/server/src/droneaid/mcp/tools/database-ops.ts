@@ -129,7 +129,15 @@ export function pickDatabase(
   databaseId?: string,
 ): DatabaseData {
   if (databaseId) {
-    const matches = databases.filter((db) => db.id === databaseId);
+    let matches = databases.filter((db) => db.id === databaseId);
+    if (!matches.length) {
+      // The agent often names a database by its title ("Guests").
+      const title = databaseId.trim().toLocaleLowerCase();
+      const named = databases.filter(
+        (db) => (db.title ?? '').trim().toLocaleLowerCase() === title,
+      );
+      if (named.length === 1) matches = named;
+    }
     if (matches.length === 1) return matches[0];
     if (matches.length > 1) {
       throw new DatabaseError(

@@ -96,7 +96,15 @@ export function resolveDatabase(
 ): DatabaseRef {
   const all = findDatabases(doc, field);
   if (databaseId) {
-    const matches = all.filter((db) => db.id === databaseId);
+    let matches = all.filter((db) => db.id === databaseId);
+    if (!matches.length) {
+      // The agent often names a database by its title ("Guests").
+      const title = databaseId.trim().toLocaleLowerCase();
+      const named = all.filter(
+        (db) => (db.title ?? '').trim().toLocaleLowerCase() === title,
+      );
+      if (named.length === 1) matches = named;
+    }
     if (matches.length === 1) return matches[0];
     if (matches.length > 1) {
       throw new DatabaseError(

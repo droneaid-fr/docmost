@@ -413,6 +413,25 @@ describe('read_database', () => {
     expect(budget.rows[0].values).toEqual({ Item: 'Props' });
   });
 
+  it('accepts a database title as databaseId, for reads and writes', async () => {
+    const { ctx } = setup(seed);
+    const budget = json(
+      await readDatabaseTool.execute({ docId: 'p-two', databaseId: 'budget' }, ctx),
+    );
+    expect(budget.databaseId).toBe(other.id);
+    const reply = json(
+      await updateDatabaseRowsTool.execute(
+        {
+          docId: 'p-two',
+          databaseId: 'Guests',
+          updates: [{ rowId: guests.rows[0].id, values: { blacklisted: true } }],
+        },
+        ctx,
+      ),
+    );
+    expect(reply).toMatchObject({ success: true, updatedRows: 1 });
+  });
+
   it('reads the live doc while an editor holds unsaved changes', async () => {
     const { ctx, hocuspocus } = setup(seed);
     const editor = await hocuspocus.openDirectConnection('page.p-agent', {});

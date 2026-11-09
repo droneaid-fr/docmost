@@ -57,7 +57,9 @@ const DATABASE_ID = z
   .min(1)
   .max(100)
   .optional()
-  .describe('Needed only when the document has more than one database');
+  .describe(
+    'Database id (or its title). Needed only when the document has more than one database',
+  );
 
 const cellInput = z
   .union([
