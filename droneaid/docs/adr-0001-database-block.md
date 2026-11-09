@@ -152,3 +152,33 @@ without a marker imports as a normal table, never as a database.
   frame time in headless Chromium with software rendering. The last row is reached.
 - Committing a cell edit (blur → PM transaction → y-prosemirror → Yjs): 4–6 ms.
 - Markdown export of the page: 87 KB, with all 777 rows as table lines.
+
+## MCP tools (S4c, 2026-11-09)
+
+`apps/server/src/droneaid/mcp/tools/databases.ts` (tools) and `database-ops.ts` (what they do
+to the Y.Doc). Names, arguments, replies and refusals follow our AFFiNE fork
+(`plugins/mcp/tools/databases.ts`), so the agent's prompts and `pdf-import` keep working:
+`read_database`, `create_database`, `add_database_rows`, `update_database_rows`,
+`remove_database_rows`, `update_database_columns` (`add`, `rename`, `remove`, `set_type`).
+
+- Every write runs in one `withLiveDoc` transaction and is validated in full first; a refusal
+  starts with "Nothing was changed." `update_database_columns` runs its ops on a copy of the
+  doc first, so an op that fails after earlier ones applies none of them.
+- Type names are the block's; `rich-text` is accepted as `text`. AFFiNE's `progress` type does
+  not exist here and is refused.
+- `create_database` makes repeated or empty column names unique (`Name (2)`, `Column 3`) and
+  reports them in `renamedColumns`; the block needs unique names, a CSV header may not have them.
+- `read_database` gives checkbox values always as `true`/`false` (AFFiNE left `false` out), so a
+  rule such as the guest-list blacklist never depends on a missing key. Other empty values are
+  left out. `search` matches the given values' text (`true` for a checked box).
+- Reads use the live doc when this collaboration server has it loaded, else the stored
+  `content`; they never open a connection, so a read neither loads nor saves the page.
+- `read_document` shows each database as one line,
+  `<!-- database id=X "Title" (N rows, M columns): ... -->`; `update_document` keeps the database
+  where that line (long or short form) stands.
+
+**No server-side `import_csv`.** The agent's `import_csv` lives in its `pdf-import` helper,
+next to the file it reads; with `as_database` it calls `create_document` and then
+`create_database` with all rows in one call (777 rows × 8 columns take about 0.2 s end to end
+locally). A server tool would need the same rows sent over MCP, so it adds nothing. AFFiNE never
+had one either.
