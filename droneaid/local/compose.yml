@@ -1,6 +1,7 @@
-# Local stack for our own Docmost image (S7 integration port block).
+# Local verification stack for our own Docmost image (S7 integration port block).
 # Build the image first:  docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .
-# Then, from this directory:  cp .env.example .env  (fill APP_SECRET)  &&  docker compose up -d
+# Then, from this directory:  cp .env.example .env  (fill APP_SECRET, POSTGRES_PASSWORD)  &&  docker compose up -d
+# See droneaid/README.md, "Local verification stack".
 name: docmost-local
 
 services:
@@ -15,6 +16,12 @@ services:
     environment:
       DATABASE_URL: postgresql://docmost:${POSTGRES_PASSWORD}@db:5432/docmost
       REDIS_URL: redis://redis:6379
+      # Mail goes to mailpit (UI http://localhost:8025), never out.
+      MAIL_DRIVER: smtp
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_IGNORETLS: "true"
     ports:
       - "127.0.0.1:3000:3000"
     restart: unless-stopped
@@ -46,6 +53,22 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
+
+  # Catches every mail the app sends (password reset, invitations).
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
+  # Stand-in for Gemini: tags text with " [fake-<lang>]" instead of translating.
+  # Used only when .env sets TRANSLATE_GEMINI_BASE_URL=http://fake-gemini:8080/v1beta/models.
+  fake-gemini:
+    image: node:26-slim
+    command: ["node", "/fake-gemini.mjs"]
+    volumes:
+      - ./fake-gemini.mjs:/fake-gemini.mjs:ro
+    restart: unless-stopped
 
 volumes:
   docmost_storage:
