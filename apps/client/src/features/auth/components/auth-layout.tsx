@@ -1,6 +1,7 @@
 import React from "react";
 import { Group, Text } from "@mantine/core";
 import classes from "./auth.module.css";
+import SourceCodeLink from "@/droneaid/source/source-code-link.tsx";
 
 type AuthLayoutProps = {
   children: React.ReactNode;
@@ -21,6 +22,10 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         </Text>
       </Group>
       <main>{children}</main>
+      {/* DroneAid: AGPL §13 source offer on every auth page */}
+      <Text size="xs" c="dimmed" ta="center" mt="md" mb="md">
+        <SourceCodeLink style={{ color: "inherit" }} />
+      </Text>
     </>
   );
 }

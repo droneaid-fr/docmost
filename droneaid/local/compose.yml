@@ -1,5 +1,5 @@
 # Local verification stack for our own Docmost image (S7 integration port block).
-# Build the image first:  docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .
+# Build the image first:  docker buildx build --platform linux/amd64 --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" -t docmost-droneaid:local --load .
 # Then, from this directory:  cp .env.example .env  (fill APP_SECRET, POSTGRES_PASSWORD)  &&  docker compose up -d
 # See droneaid/README.md, "Local verification stack".
 name: docmost-local

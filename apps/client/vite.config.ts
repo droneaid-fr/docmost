@@ -37,6 +37,12 @@ export default defineConfig(({ mode }) => {
         BETA_PUBLIC_SPACES,
       },
       APP_VERSION: JSON.stringify(process.env.npm_package_version),
+      // DroneAid: commit of this build for the AGPL source link (Docker build arg SOURCE_COMMIT)
+      DRONEAID_SOURCE_COMMIT: JSON.stringify(
+        /^[0-9a-f]{7,40}$/.test(process.env.SOURCE_COMMIT ?? "")
+          ? process.env.SOURCE_COMMIT
+          : "",
+      ),
     },
     plugins: [react()],
     build: {

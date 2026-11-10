@@ -73,12 +73,13 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.image }}
-          # Overrides upstream's LABEL, which names docmost/docmost; GHCR links the
-          # package to the repo in this label.
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=AGPL-3.0
+          # AGPL §13: the commit is baked into the client's "Source code" link and the
+          # image's org.opencontainers.image.revision label (source/licenses labels come
+          # from the Dockerfile). github.sha is always a commit already pushed to this
+          # public repo. NEVER rewrite (force-push, rebase away, delete) a commit that has
+          # been deployed: its source must stay reachable while it runs, and after.
+          build-args: |
+            SOURCE_COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=docmost-arm64
           cache-to: type=gha,scope=docmost-arm64,mode=max
 

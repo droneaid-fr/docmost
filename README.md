@@ -1,3 +1,8 @@
+> **DroneAid fork.** This is a modified version of Docmost, maintained by Trigub
+> Technologies OÜ for DroneAid since 2026-11-08. Our changes are licensed AGPL-3.0-or-later.
+> See [`NOTICE.md`](NOTICE.md) for copyright and licensing, and
+> [`droneaid/README.md`](droneaid/README.md) for what we changed and how to build it.
+
 <div align="center">
     <h1><b>Docmost</b></h1>
     <p>

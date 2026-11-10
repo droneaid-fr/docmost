@@ -9,7 +9,10 @@ WORKDIR /app
 COPY . .
 
 RUN pnpm install --frozen-lockfile
-RUN NX_DAEMON=false pnpm build
+# DroneAid: commit baked into the client for the AGPL source link (vite.config.ts).
+# Declared after install so a new commit only invalidates the build layer.
+ARG SOURCE_COMMIT=""
+RUN NX_DAEMON=false SOURCE_COMMIT="$SOURCE_COMMIT" pnpm build
 
 FROM base AS installer
 
@@ -40,7 +43,12 @@ RUN mkdir -p /app/data/storage
 
 # pnpm, its store and its caches stay behind in the installer stage
 FROM node:26-slim
-LABEL org.opencontainers.image.source="https://github.com/docmost/docmost"
+# DroneAid: our modifications are AGPL-3.0-or-later; upstream core states "AGPL 3.0"
+# (see NOTICE.md). The source of this image is the fork at the revision below.
+ARG SOURCE_COMMIT=""
+LABEL org.opencontainers.image.source="https://github.com/droneaid-fr/docmost" \
+  org.opencontainers.image.revision="$SOURCE_COMMIT" \
+  org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends curl bash \
@@ -56,6 +64,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm \
   && rm -rf /root/.node-gyp
 
 COPY --from=installer --chown=node:node /app /app
+COPY --chown=node:node LICENSE NOTICE.md /app/
 
 WORKDIR /app/apps/server
 

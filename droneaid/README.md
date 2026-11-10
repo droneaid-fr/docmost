@@ -7,6 +7,9 @@ free AGPL-3.0 edition, built from source, and replaces our self-hosted AFFiNE at
 
 The fork is public because the AGPL requires it: anyone who uses a modified server must be
 able to get its source.
+Copyright, licence (`AGPL-3.0-or-later` for our changes) and the modification notice are
+in the root [`NOTICE.md`](../NOTICE.md). Every page links its exact source commit
+(`apps/client/src/droneaid/source/`); images get the commit as build arg `SOURCE_COMMIT`.
 
 ## Rules
 
@@ -173,7 +176,8 @@ node -e 'const fs=require("fs");let n=0;for(const f of fs.readdirSync("/tmp/clie
 
 ```bash
 # amd64, loaded into the local engine (~100 s on the dev host)
-docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .
+docker buildx build --platform linux/amd64 --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  -t docmost-droneaid:local --load .
 
 # arm64 (the production VM), cross-built on amd64 (~45 s cold); register qemu once with:
 docker run --privileged --rm tonistiigi/binfmt --install arm64
@@ -209,7 +213,7 @@ Secrets live in `droneaid/local/.env` (untracked, mode 600; template `.env.examp
 ### Start, stop, status
 
 ```bash
-docker buildx build --platform linux/amd64 -t docmost-droneaid:local --load .   # after code changes
+docker buildx build --platform linux/amd64 --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" -t docmost-droneaid:local --load .   # after code changes
 cd droneaid/local
 docker compose up -d          # start (restart policy unless-stopped: it comes back after a reboot)
 docker compose ps

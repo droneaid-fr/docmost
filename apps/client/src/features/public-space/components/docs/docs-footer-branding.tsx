@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import styles from "./docs.module.css";
+import SourceCodeLink from "@/droneaid/source/source-code-link.tsx";
 
 export default function DocsFooterBranding({
   className,
@@ -18,6 +19,9 @@ export default function DocsFooterBranding({
       >
         Powered by Docmost
       </a>
+      {/* DroneAid: AGPL §13 source offer on public share and space pages */}
+      <span className={styles.footerBranding}> · </span>
+      <SourceCodeLink className={styles.footerBranding} />
     </footer>
   );
 }

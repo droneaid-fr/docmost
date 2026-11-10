@@ -259,5 +259,11 @@
     "expired": "expired",
     "revoke": "Revoke",
     "revokeConfirm": "Revoke token \"{{name}}\"? Clients using it stop working at once."
+  },
+  "source": {
+    "link": "Source code (AGPL-3.0)",
+    "title": "Modified version of Docmost, run by DroneAid. Free software under the GNU AGPL-3.0, without any warranty. Get the exact source of this version.",
+    "version": "DroneAid {{commit}}",
+    "versionDev": "DroneAid (dev)"
   }
 }

@@ -259,5 +259,11 @@
     "expired": "expiré",
     "revoke": "Révoquer",
     "revokeConfirm": "Révoquer le jeton « {{name}} » ? Les clients qui l’utilisent s’arrêtent aussitôt."
+  },
+  "source": {
+    "link": "Code source (AGPL-3.0)",
+    "title": "Version modifiée de Docmost, exploitée par DroneAid. Logiciel libre sous licence GNU AGPL-3.0, sans aucune garantie. Obtenez le code source exact de cette version.",
+    "version": "DroneAid {{commit}}",
+    "versionDev": "DroneAid (dev)"
   }
 }
