@@ -28,8 +28,9 @@ able to get its source.
 
 | Branch | Purpose |
 |---|---|
-| `main` | Mirrors upstream `main`. Later (Phase 7) it becomes what we deploy. Nothing of ours lands here before then. |
-| `droneaid` | Integration branch: our work on top of upstream `main`. |
+| `main` | Mirrors upstream `main`. Nothing of ours lands here. |
+| `droneaid` | Integration branch: our work on top of upstream `main`. GitHub default branch. |
+| `production` | Promotion branch: a push deploys (`git push origin droneaid:production`). See [`deploy/README.md`](deploy/README.md). |
 | `feat/<step>` | One branch per step, created from `droneaid` in a worktree at `base/docmost-wt/<step>`. It merges back into `droneaid` once the step's check passes. |
 
 Remotes: `origin` = `droneaid-fr/docmost`, `upstream` = `docmost/docmost`. We pull upstream
@@ -53,8 +54,12 @@ releases deliberately, never continuously. Never push to `main` and never open P
 - Re-check that new Enterprise UI in core is hidden, not greyed out (see "Removed Enterprise
   features (S8)").
 
-GitHub Actions is **disabled** on the fork, so upstream's `release.yml` cannot run on our tag
-pushes. We add our own deploy workflow in Phase 7.
+GitHub Actions is enabled on the fork for our own workflow only:
+`.github/workflows/droneaid-deploy.yml` builds `ghcr.io/droneaid-fr/docmost:stable-<sha9>`
+(arm64, native runner) and, on a push to `production`, rolls it out to the VM. Upstream's
+`release.yml` is disabled (`gh workflow disable release.yml`); re-check after a sync that
+adds a new upstream workflow, and disable it too. Deploy, rollback, backups and the cutover
+runbook: [`deploy/README.md`](deploy/README.md).
 
 ## Dev setup
 

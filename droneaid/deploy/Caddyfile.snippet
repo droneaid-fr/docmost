@@ -1,0 +1,55 @@
+# Caddy configuration for Docmost. Two parts; see droneaid/deploy/README.md.
+#
+# Caddy reaches the app as `docmost:3000` over the external docker network `edge`.
+# Websockets (/collab, /socket.io) need no extra config: reverse_proxy upgrades them.
+
+# =====================================================================================
+# PART 1 - STAGING. Append this block to /opt/affine/Caddyfile (AFFiNE's Caddy, which
+# must be on the `edge` network, README "Staging setup"). Replace the hostname with
+# the staging name you created in DNS; it must match APP_URL in docmost.env.
+# =====================================================================================
+
+docmost-staging.droneaid.fr {
+	encode zstd gzip
+	# Keep the staging copy out of search engines; it may hold real pages.
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy docmost:3000
+}
+
+# =====================================================================================
+# PART 2 - CUTOVER. The whole file for the standalone Caddy at /opt/caddy/conf/Caddyfile
+# (droneaid/deploy/caddy/compose.yml). Put redirects.caddy beside it: the importer
+# writes it next to url-map.json, or regenerate it with
+#   node droneaid/deploy/gen-redirects.mjs <import-out>/url-map.json > redirects.caddy
+# Delete the staging block (or keep it pointing at the same app) at cutover.
+# =====================================================================================
+
+# Defines the snippet (droneaid_redirects): 285 old AFFiNE paths -> Docmost paths (301,
+# query kept), /invite/* -> /login, any other old AFFiNE path -> /home.
+import redirects.caddy
+
+base.droneaid.fr {
+	encode zstd gzip
+
+	# Luma MCP OAuth client ID metadata document for the da-france-agent Hermes
+	# profile. Luma has no dynamic client registration; the client_id IS this
+	# URL, and Luma fetches it at login. Static, no secrets. Source of truth:
+	# ~/.hermes/profiles/da-france-agent/mcp/luma/client-metadata.json
+	handle /oauth/hermes-luma.json {
+		header Content-Type application/json
+		respond `{"client_id":"https://base.droneaid.fr/oauth/hermes-luma.json","client_name":"DA France Agent (Hermes)","redirect_uris":["http://127.0.0.1:8349/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}` 200
+	}
+
+	import droneaid_redirects
+
+	reverse_proxy docmost:3000
+}
+
+# Former canonical host, kept indefinitely. Existing bookmarks, workspace invite
+# links and Google OAuth callbacks issued before 2026-09-22 all point here, so
+# this block is not safe to remove. It needs its own cert even though it only
+# redirects: without a site block Caddy has no cert, aborts the handshake, and
+# browsers report ERR_SSL_PROTOCOL_ERROR rather than anything HTTP-level.
+base.drone-aid.fr {
+	redir https://base.droneaid.fr{uri} permanent
+}

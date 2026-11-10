@@ -1,0 +1,44 @@
+# Standalone Caddy for /opt/caddy, used from the cutover on (README "Cutover").
+# Until then Caddy lives in /opt/affine/compose.yml (container affine_caddy); this file
+# takes it out of the AFFiNE project so AFFiNE can be stopped without taking the
+# front door down.
+#
+#   /opt/caddy/compose.yml        this file
+#   /opt/caddy/conf/Caddyfile     PART 2 of droneaid/deploy/Caddyfile.snippet
+#   /opt/caddy/conf/redirects.caddy
+#
+# The config directory is mounted, not the single file: editors that replace the file
+# (new inode) would otherwise leave the container reading the old one.
+# Reload after an edit: docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+name: caddy
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./conf:/etc/caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    mem_limit: 256m
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  # AFFiNE's Caddy volumes, reused so the certificates and the ACME account carry over.
+  # Never `docker compose down -v` in /opt/affine while these are in use.
+  caddy_data:
+    external: true
+    name: affine_caddy_data
+  caddy_config:
+    external: true
+    name: affine_caddy_config

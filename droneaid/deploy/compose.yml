@@ -1,0 +1,79 @@
+# Production stack for /opt/docmost on the Oracle VM. Runbook: droneaid/deploy/README.md.
+#
+# Files beside this one on the VM (never in git):
+#   .env          written ONLY by the deploy workflow: DOCMOST_IMAGE=ghcr.io/droneaid-fr/docmost:stable-<sha>
+#   .env.previous the image that ran before the last rollout (rollback target)
+#   docmost.env   app configuration and secrets, from droneaid/deploy/docmost.env.example (mode 600)
+#
+# Nothing publishes a port. Caddy reaches `docmost:3000` over the external `edge`
+# network (create it once: `docker network create edge`); postgres and redis sit on
+# this project's own network only.
+name: docmost
+
+services:
+  docmost:
+    image: ${DOCMOST_IMAGE:?DOCMOST_IMAGE must be set in /opt/docmost/.env}
+    container_name: docmost
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: docmost.env
+    environment:
+      STORAGE_DRIVER: local
+    volumes:
+      # The image runs as uid 1000 (node): chown 1000:1000 data/storage once.
+      - ./data/storage:/app/data/storage
+    networks:
+      - default
+      - edge
+    # Shares the 12 GB VM with AFFiNE during staging; the app idles at a few hundred MB.
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      # Migrations run on boot before the server listens.
+      start_period: 120s
+
+  db:
+    image: postgres:18
+    container_name: docmost_postgres
+    restart: unless-stopped
+    # Reads POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD; ignores the rest.
+    env_file: docmost.env
+    environment:
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      # postgres:18 keeps PGDATA under /var/lib/postgresql/18/docker; mount the parent.
+      - ./data/postgres:/var/lib/postgresql
+    mem_limit: 1g
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8
+    container_name: docmost_redis
+    restart: unless-stopped
+    # BullMQ queues (translation, history, imports) live here: keep them on disk and
+    # never evict a job key.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - ./data/redis:/data
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  edge:
+    external: true

@@ -1,0 +1,183 @@
+name: DroneAid deploy
+
+# Fork-only workflow (upstream never has this file, so syncs never conflict).
+# Builds our arm64 image natively and rolls it out to the Oracle VM's /opt/docmost.
+# Runbook: droneaid/deploy/README.md.
+#
+# Branch model: work lands on `droneaid`; `production` is promoted from it deliberately,
+# and only a push to `production` deploys. `workflow_dispatch` builds any ref; it deploys
+# only with `deploy: true`.
+#
+# Repository secrets (environment `production`):
+#   ORACLE_HOST              public IP / hostname of the VM
+#   ORACLE_USER              ssh user (ubuntu)
+#   ORACLE_SSH_KEY           private key, full PEM including header/footer
+#   ORACLE_SSH_KNOWN_HOSTS   known_hosts line(s) pinning the host key
+# Repository variable:
+#   DEPLOY_URL               public origin checked after the rollout, e.g. https://base.droneaid.fr
+#
+# The rollout writes only /opt/docmost/.env (DOCMOST_IMAGE=...), keeps .env.previous and
+# rolls back on failure. Rollback is image-only and is refused once the new image has run
+# a migration (the previous image would not boot); see droneaid/deploy/rollout.sh.
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Also roll the image out to the VM (otherwise build and push only)
+        type: boolean
+        default: false
+
+permissions: {}
+
+env:
+  IMAGE_REPO: ghcr.io/droneaid-fr/docmost
+
+jobs:
+  build:
+    name: Build arm64 image
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          set -euo pipefail
+          echo "image=${IMAGE_REPO}:stable-${GITHUB_SHA::9}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Native arm64 runner: the plain Dockerfile works (the qemu deadlock that
+      # droneaid/docker/build-arm64.sh works around only happens under emulation).
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          # Overrides upstream's LABEL, which names docmost/docmost; GHCR links the
+          # package to the repo in this label.
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=AGPL-3.0
+          cache-from: type=gha,scope=docmost-arm64
+          cache-to: type=gha,scope=docmost-arm64,mode=max
+
+      - name: Summary
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+        run: echo "Pushed \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Roll out to Oracle VM
+    needs: build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    # Never two rollouts at once, never cancel one midway: an interrupted
+    # `compose up` can leave the stack half-recreated.
+    concurrency:
+      group: droneaid-deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+      DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: droneaid/deploy
+
+      - name: Configure SSH
+        env:
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_SSH_KNOWN_HOSTS: ${{ secrets.ORACLE_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEPLOY_URL" ] || { echo "::error::repository variable DEPLOY_URL is not set"; exit 1; }
+          [ -n "$ORACLE_SSH_KNOWN_HOSTS" ] || { echo "::error::ORACLE_SSH_KNOWN_HOSTS is not set"; exit 1; }
+          mkdir -p ~/.ssh
+          install -m 600 /dev/null ~/.ssh/oracle_key
+          printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/oracle_key
+          # Pin the host key: without this the rollout is trivially MITM-able.
+          printf '%s\n' "$ORACLE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        id: deploy
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          # Job-scoped token, valid only for this run; lets the VM pull a private
+          # package without parking a long-lived PAT on the box.
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          # First stdin line = token (kept out of argv and off disk), the rest = the
+          # script, saved to a temp file before it runs so no command can eat it.
+          { printf '%s\n' "$REGISTRY_TOKEN"; cat droneaid/deploy/rollout.sh; } |
+            ssh -i ~/.ssh/oracle_key -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              -o ServerAliveInterval=30 "${ORACLE_USER}@${ORACLE_HOST}" \
+              "IFS= read -r REGISTRY_TOKEN && export REGISTRY_TOKEN REGISTRY_USER='${REGISTRY_USER}' &&
+               s=\$(mktemp) && cat > \"\$s\" && bash \"\$s\" deploy '${IMAGE}'; rc=\$?; rm -f \"\$s\"; exit \$rc"
+
+      - name: Verify the public health endpoint
+        id: verify
+        run: |
+          set -euo pipefail
+          url="${DEPLOY_URL%/}/api/health"
+          for attempt in $(seq 1 30); do
+            body="$(curl -fsS --max-time 10 "$url" || true)"
+            if printf '%s' "$body" | grep -q '"status":"ok"'; then
+              echo "Healthy after ${attempt} attempt(s): ${body}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: not healthy yet (${body:-no response}), retrying..."
+            sleep 10
+          done
+          echo "::error::${url} did not report status ok within 5 minutes."
+          exit 1
+
+      - name: Roll back after a failed public check
+        if: failure() && steps.verify.outcome == 'failure'
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/oracle_key -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -o ServerAliveInterval=30 "${ORACLE_USER}@${ORACLE_HOST}" \
+            "s=\$(mktemp) && cat > \"\$s\" && bash \"\$s\" rollback; rc=\$?; rm -f \"\$s\"; exit \$rc" \
+            < droneaid/deploy/rollout.sh
+          echo "::error::Rolled back: ${IMAGE} failed the public health check."
+          exit 1
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -f ~/.ssh/oracle_key
