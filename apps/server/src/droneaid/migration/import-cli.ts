@@ -12,6 +12,7 @@ import { AffineImporter, ImportOptions } from './importer.service';
 import { reportMarkdown } from './report';
 import { ImportVerifier, verifyMarkdown } from './verifier.service';
 import { caddySnippet } from './url-map';
+import { parseExcludeList } from './bundle';
 
 /**
  * AFFiNE bundle -> Docmost, as a one-shot Nest app (the whole server module
@@ -22,6 +23,8 @@ import { caddySnippet } from './url-map';
  *     --bundle <migration-bundle-dir> --out <report-dir> [--skip-trashed] \
  *     [--owner-email filipp@droneaid.fr] [--workspace-name DroneAid] \
  *     [--agent-name "DroneAid France agent"] [--agent-workspace "DroneAid France"] [--no-agent]
+ *     [--exclude-workspaces "Demo Workspace"]   AFFiNE workspaces left out (names or ids, comma
+ *                                               separated; default "Demo Workspace"; `none` = all)
  *     [--verify | --verify-only]   check the result against the bundle (exit 2 on a failed check)
  *
  * Reads the root `.env` like the server (DATABASE_URL, REDIS_URL, storage).
@@ -43,6 +46,7 @@ export function parseArgs(argv: string[], now = new Date()): Args {
   const known = new Set([
     '--bundle', '--out', '--owner-email', '--workspace-name', '--agent-name',
     '--agent-workspace', '--skip-trashed', '--no-agent', '--verify', '--verify-only',
+    '--exclude-workspaces',
   ]);
   for (const a of argv) {
     if (a.startsWith('--') && !known.has(a)) throw new Error(`Unknown option ${a}`);
@@ -58,6 +62,7 @@ export function parseArgs(argv: string[], now = new Date()): Args {
     ownerEmail: value('--owner-email') ?? 'filipp@droneaid.fr',
     workspaceName: value('--workspace-name') ?? 'DroneAid',
     skipTrashed: argv.includes('--skip-trashed'),
+    excludeWorkspaces: parseExcludeList(value('--exclude-workspaces')),
     verify: argv.includes('--verify-only') ? 'only' : argv.includes('--verify') ? 'after' : null,
     agent: argv.includes('--no-agent')
       ? null
@@ -114,7 +119,7 @@ async function main() {
       );
     }
     if (args.verify) {
-      const check = await app.get(ImportVerifier).verify(args.bundleDir);
+      const check = await app.get(ImportVerifier).verify(args.bundleDir, args.excludeWorkspaces);
       await fs.mkdir(args.outDir, { recursive: true, mode: 0o700 });
       await fs.writeFile(path.join(args.outDir, 'verify.json'), JSON.stringify(check, null, 2) + '\n', { mode: 0o600 });
       await fs.writeFile(path.join(args.outDir, 'verify.md'), verifyMarkdown(check), { mode: 0o600 });

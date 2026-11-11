@@ -245,7 +245,8 @@ the app container against the empty database, then `--verify`. Reports:
 `base/backups/import-docmost-s7-local-20261109/` (`verify.md`: PASS).
 
 - 4 spaces (DroneAid France, DroneAid Academy, DroneAid R&D, Demo Workspace), plus Docmost's
-  own empty General.
+  own empty General. Since S12 the importer leaves Demo Workspace out and deletes General;
+  re-import (`./run.sh reset-local --yes`, then RUNBOOK step 3) to get that state here.
 - 15 human users and the DroneAid France agent.
 - 56 live doc pages, 13 folder pages and 36 trashed docs (in the Docmost trash).
 - 97 files.

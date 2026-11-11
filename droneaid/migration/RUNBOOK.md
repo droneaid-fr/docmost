@@ -75,7 +75,9 @@ docker compose exec docmost rm -rf /tmp/bundle /tmp/import
 - Do not import a different bundle on top of an import: it is refused.
 
 Defaults used: owner `filipp@droneaid.fr`, workspace name `DroneAid`, agent
-`DroneAid France agent` in space DroneAid France, trashed docs imported. All
+`DroneAid France agent` in space DroneAid France, trashed docs imported,
+**Demo Workspace not migrated** (`--exclude-workspaces`), Docmost's default
+**General space deleted** after setup (`verify.md` checks both). All
 users get an unusable random password; they sign in with Google, which links
 by email.
 
@@ -97,8 +99,9 @@ Keep the `base.drone-aid.fr` → `base.droneaid.fr` redirect and
 `/oauth/hermes-luma.json` as they are. `caddy validate`, then reload. Spot
 check: an old doc URL (301 to `/s/...`), a published doc with `?lang=fr` (301
 to `/share/...?...lang=fr`), `/invite/x` (302 `/login`), an unknown
-`/workspace/...` (302 `/home`). `url-map.json` lists the 119 unmapped paths
-(unreferenced or canvas-only blobs); they fall back to `/home`.
+`/workspace/...` (302 `/home`). `url-map.json` lists the unmapped paths
+(unreferenced or canvas-only blobs; 103 in the S12 dry run, 259 mapped); they
+fall back to `/home`, as do Demo Workspace's old URLs.
 
 ## 5. Admin actions in Docmost (as filipp, signed in with Google)
 

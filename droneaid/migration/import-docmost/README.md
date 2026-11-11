@@ -43,15 +43,25 @@ Docmost.
 
 ## Mapping
 
-- **Spaces**: one per AFFiNE workspace, same name. Folders become empty folder
+- **Spaces**: one per AFFiNE workspace, same name, except the workspaces left
+  out with `--exclude-workspaces` (default `Demo Workspace`, a local-only test
+  workspace whose only member was mark.p): no space, pages, files or
+  import-map rows; its old URLs are dropped from the URL map and fall through
+  to `/home`. The report's *Workspaces not migrated* section counts what was
+  dropped; the verifier checks against the bundle without it. Folders become empty folder
   pages; docs in a folder become their children; docs in no folder go to the
   top level after the folders, oldest first. Sibling order follows the AFFiNE
   sidebar (`index`). A doc in several folders goes under the first (reported).
 - **Users**: the 15 humans; `--owner-email` → workspace owner, AFFiNE admins →
   admin, others member. Agents and unused placeholders are skipped (reported).
 - **Space roles**: AFFiNE owner/admin → admin, member → writer, external →
-  reader. "Everyone" gets no access to migrated spaces; General is left as
-  Docmost creates it. Per-doc grants are not reproduced; the report lists those
+  reader. "Everyone" gets no access to migrated spaces.
+- **General**: Docmost's setup creates an empty "General" space (Everyone =
+  writer) as `workspaces.default_space_id`. The importer deletes it with core's
+  `SpaceService.deleteSpace` right after setup and sets the reference to null
+  (only an empty, unmapped space with slug `general`; otherwise it warns and
+  keeps it). Core never reads `default_space_id`; new members get spaces from
+  their signup rule or invitation groups only. Per-doc grants are not reproduced; the report lists those
   that widened or narrowed access.
 - **Agent**: `DroneAid France agent`, writer in DroneAid France, reader where
   it held AFFiNE grants in other workspaces (none in the current data).
@@ -77,7 +87,8 @@ pnpm editor-ext:build && (cd apps/server && npx nest build)
 CLI flags: `--owner-email` (default `filipp@droneaid.fr`), `--workspace-name`
 (`DroneAid`, used only when Docmost is empty), `--agent-name`
 (`DroneAid France agent`), `--agent-workspace` (`DroneAid France`),
-`--no-agent`, `--skip-trashed`, `--verify` / `--verify-only`.
+`--no-agent`, `--skip-trashed`, `--exclude-workspaces "<name or id>,..."`
+(default `Demo Workspace`; `none` imports all), `--verify` / `--verify-only`.
 
 The CLI reads the root `.env` (or the container environment) like the server
 and must run with `apps/server` as working directory (local storage resolves

@@ -39,6 +39,7 @@ import {
   BundleComment,
   BundleDatabase,
   BundleDoc,
+  DEFAULT_EXCLUDED_WORKSPACES,
   LoadedWorkspace,
   loadBundle,
   readDocFile,
@@ -72,6 +73,8 @@ export type ImportOptions = {
   workspaceName: string;
   skipTrashed: boolean;
   agent: { name: string; workspaceName: string } | null;
+  /** AFFiNE workspace names or ids left out; default `DEFAULT_EXCLUDED_WORKSPACES`. */
+  excludeWorkspaces?: readonly string[];
 };
 
 type PageRecord = PlannedPage & { workspaceKey: string; created: boolean };
@@ -161,7 +164,7 @@ export class AffineImporter {
 
   async run(opts: ImportOptions): Promise<ImportReport> {
     const started = Date.now();
-    this.bundle = await loadBundle(opts.bundleDir);
+    this.bundle = await loadBundle(opts.bundleDir, opts.excludeWorkspaces ?? DEFAULT_EXCLUDED_WORKSPACES);
     this.report = newReport(this.bundle, opts);
     const workspaces = this.bundle.workspaces.filter((w) => !!w.workspace);
 
@@ -221,6 +224,43 @@ export class AffineImporter {
     if (!bundles.length) {
       await this.remember('bundle', this.bundle.sha256, workspace.id);
     }
+    await this.removeDefaultSpace();
+  }
+
+  /**
+   * `initialSetup` creates a "General" space (owner admin, "Everyone"
+   * writer) and points `workspaces.default_space_id` at it. DroneAid has no
+   * General space (S12). Core only writes `default_space_id` (signup, invites
+   * and our Google signup never read it; the FK is ON DELETE SET NULL), so the
+   * space is deleted through core's `SpaceService.deleteSpace` and the
+   * reference becomes null. Only an empty, unmapped default space is removed,
+   * so a re-run, or a General space someone has started using, is left alone.
+   */
+  private async removeDefaultSpace() {
+    const spaceId = this.workspace.defaultSpaceId;
+    if (!spaceId) return;
+    const mappedSpaces = new Set(
+      [...this.map.entries()].filter(([k]) => k.startsWith('space:')).map(([, v]) => v),
+    );
+    if (mappedSpaces.has(spaceId)) return;
+    const space = await this.spaceRepo.findById(spaceId, this.workspace.id);
+    if (!space) return;
+    const pages = await this.db
+      .selectFrom('pages')
+      .select((eb) => eb.fn.countAll<number>().as('n'))
+      .where('spaceId', '=', spaceId)
+      .executeTakeFirst();
+    if (space.slug !== 'general' || Number(pages?.n ?? 0) > 0) {
+      this.report.warnings.push(
+        `Default space "${space.name}" (${space.slug}) kept: not the empty General space of setup.`,
+      );
+      return;
+    }
+    await this.spaceService.deleteSpace(spaceId, this.workspace.id);
+    await this.workspaceRepo.updateWorkspace({ defaultSpaceId: null }, this.workspace.id);
+    this.workspace = { ...this.workspace, defaultSpaceId: null };
+    this.report.defaultSpaceRemoved = { id: spaceId, name: space.name, slug: space.slug };
+    this.count('defaultSpaceRemoved');
   }
 
   // ------------------------------------------------------------- users

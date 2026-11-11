@@ -216,7 +216,89 @@ export type Bundle = {
   published: BundlePublishedDoc[];
   oldUrls: { canonicalHost: string; hosts: string[]; paths: BundleOldUrl[] };
   workspaces: LoadedWorkspace[];
+  /** Workspaces left out of the import (see `excludeWorkspaces`). */
+  excluded: ExcludedWorkspace[];
 };
+
+/**
+ * AFFiNE workspaces the cutover leaves out by default (S12): "Demo Workspace"
+ * was a local-only standard workspace with one member (mark.p) and no real
+ * content. Matched by name or AFFiNE workspace id.
+ */
+export const DEFAULT_EXCLUDED_WORKSPACES: readonly string[] = ['Demo Workspace'];
+
+/** `--exclude-workspaces "A,B"` (names or ids); `none` imports every workspace. */
+export function parseExcludeList(value: string | undefined): readonly string[] {
+  if (value === undefined) return DEFAULT_EXCLUDED_WORKSPACES;
+  if (value.trim().toLowerCase() === 'none') return [];
+  return value.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+export type ExcludedWorkspace = {
+  id: string;
+  name: string;
+  members: string[];
+  docs: number;
+  trashedDocs: number;
+  folders: number;
+  databases: number;
+  publishedDocs: number;
+  comments: number;
+  translations: number;
+  blobs: number;
+  blobBytes: number;
+  docGrants: number;
+  oldUrls: number;
+  agents: number;
+};
+
+const countFolders = (nodes: FolderNode[]): number =>
+  nodes.reduce((n, f) => n + 1 + countFolders(f.folders ?? []), 0);
+
+/**
+ * The bundle without the given workspaces (pure): their docs, files, grants,
+ * published docs, AFFiNE agents and old URLs are dropped, so neither the
+ * importer nor the verifier sees them (no space, page, file or import-map
+ * row; the old URLs fall through to the generic `/home` redirect). Users are
+ * kept: who exists is instance-wide. Signup rules pointing only at an
+ * excluded workspace grant nothing (their space is missing).
+ */
+export function excludeWorkspaces(bundle: Bundle, namesOrIds: readonly string[]): Bundle {
+  const wanted = new Set(namesOrIds.map((n) => n.trim()).filter(Boolean));
+  const out = bundle.workspaces.filter(
+    (w) => wanted.has(w.workspace.name) || wanted.has(w.workspace.id),
+  );
+  if (!out.length) return bundle;
+  const ids = new Set(out.map((w) => w.workspace.id));
+  const excluded: ExcludedWorkspace[] = out.map((w) => ({
+    id: w.workspace.id,
+    name: w.workspace.name,
+    members: w.workspace.members.map((m) => `${m.email}:${m.role}`),
+    docs: w.docs.filter((d) => !d.trash).length,
+    trashedDocs: w.docs.filter((d) => d.trash).length,
+    folders: countFolders(w.folders.tree),
+    databases: w.docs.reduce((n, d) => n + (d.databases?.length ?? 0), 0),
+    publishedDocs: w.docs.filter((d) => d.publish?.published).length,
+    comments: w.docs.filter((d) => d.comments).length,
+    translations: w.docs.reduce((n, d) => n + (d.translations?.length ?? 0), 0),
+    blobs: w.blobs.length,
+    blobBytes: w.blobs.reduce((n, b) => n + (b.size ?? 0), 0),
+    docGrants: w.grants.length,
+    oldUrls: bundle.oldUrls.paths.filter((p) => p.workspaceId === w.workspace.id).length,
+    agents: bundle.agents.filter((a) => a.workspaceId === w.workspace.id).length,
+  }));
+  return {
+    ...bundle,
+    workspaces: bundle.workspaces.filter((w) => !ids.has(w.workspace.id)),
+    agents: bundle.agents.filter((a) => !ids.has(a.workspaceId)),
+    published: bundle.published.filter((p) => !ids.has(p.workspaceId)),
+    oldUrls: {
+      ...bundle.oldUrls,
+      paths: bundle.oldUrls.paths.filter((p) => !p.workspaceId || !ids.has(p.workspaceId)),
+    },
+    excluded: [...bundle.excluded, ...excluded],
+  };
+}
 
 /**
  * Titles as Docmost's title editor keeps them: trimmed. An untrimmed title
@@ -243,7 +325,10 @@ async function exists(file: string): Promise<boolean> {
   }
 }
 
-export async function loadBundle(dir: string): Promise<Bundle> {
+export async function loadBundle(
+  dir: string,
+  exclude: readonly string[] = DEFAULT_EXCLUDED_WORKSPACES,
+): Promise<Bundle> {
   const root = path.resolve(dir);
   const manifest = await readJson<any>(path.join(root, 'manifest.json'));
   if (manifest.bundleFormat !== 1) {
@@ -296,7 +381,7 @@ export async function loadBundle(dir: string): Promise<Bundle> {
     });
   }
 
-  return {
+  const bundle: Bundle = {
     dir: root,
     sha256: manifest.bundleSha256,
     counts: manifest.counts ?? {},
@@ -306,7 +391,9 @@ export async function loadBundle(dir: string): Promise<Bundle> {
     published: await readJson(instance('published-docs.json')),
     oldUrls: await readJson(instance('old-urls.json')),
     workspaces,
+    excluded: [],
   };
+  return excludeWorkspaces(bundle, exclude);
 }
 
 export function docDir(bundle: Bundle, doc: BundleDoc): string {

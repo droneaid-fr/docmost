@@ -7,7 +7,7 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { droneaidDb } from '../db.types';
 import { sourceHash } from '../translate/blocks';
-import { Bundle, BundleDatabase, loadBundle, readDocFile, readDocJson } from './bundle';
+import { Bundle, BundleComment, BundleDatabase, DEFAULT_EXCLUDED_WORKSPACES, loadBundle, readDocFile, readDocJson } from './bundle';
 import { sameCell } from './database-convert';
 import { ImportMapRepo } from './import-map.repo';
 import { pageBlobKeys } from './importer.service';
@@ -44,8 +44,11 @@ export class ImportVerifier {
     private readonly mapRepo: ImportMapRepo,
   ) {}
 
-  async verify(bundleDir: string): Promise<VerifyReport> {
-    const bundle = await loadBundle(bundleDir);
+  async verify(
+    bundleDir: string,
+    exclude: readonly string[] = DEFAULT_EXCLUDED_WORKSPACES,
+  ): Promise<VerifyReport> {
+    const bundle = await loadBundle(bundleDir, exclude);
     const workspace = await this.workspaceRepo.findFirst();
     if (!workspace) throw new Error('No workspace');
     const map = await this.mapRepo.all(workspace.id);
@@ -60,6 +63,18 @@ export class ImportVerifier {
       ? await this.db.selectFrom('spaces').select('id').where('id', 'in', spaceIds).where('deletedAt', 'is', null).execute()
       : [];
     row('spaces', bundle.workspaces.length, spaces.length);
+    const excludedNames = bundle.excluded.map((w) => w.name);
+    const excludedSpaces = excludedNames.length
+      ? await this.db.selectFrom('spaces').select('id').where('workspaceId', '=', workspace.id).where('name', 'in', excludedNames).execute()
+      : [];
+    row('spaces of excluded workspaces', 0, excludedSpaces.length, excludedNames.join(', ') || 'none excluded');
+    const general = await this.db
+      .selectFrom('spaces')
+      .select('id')
+      .where('workspaceId', '=', workspace.id)
+      .where('slug', '=', 'general')
+      .execute();
+    row('default "General" space', 0, general.length, 'removed after setup; workspaces.default_space_id is null');
     const humans = bundle.users.filter((u) => !isAgentUser(u));
     const users = await this.db
       .selectFrom('users')
@@ -211,7 +226,15 @@ export class ImportVerifier {
     const comments = commentIds.length
       ? await this.db.selectFrom('comments').select('id').where('id', 'in', commentIds).execute()
       : [];
-    row('comments (incl. replies)', (bundle.counts.comments ?? 0) + (bundle.counts.replies ?? 0), comments.length);
+    let bundleComments = 0;
+    for (const doc of docs) {
+      if (!doc.comments) continue;
+      for (const c of await readDocJson<BundleComment[]>(bundle, doc, doc.comments)) {
+        if (c.deletedAt) continue; // the importer skips deleted comments and their replies
+        bundleComments += 1 + (c.replies ?? []).filter((r) => !r.deletedAt).length;
+      }
+    }
+    row('comments (incl. replies)', bundleComments, comments.length);
     const rules = await droneaidDb(this.db).selectFrom('droneaidSignupRules').select('id').where('workspaceId', '=', workspace.id).execute();
     row('signup rules', bundle.signupAllowlist.length, rules.length);
 

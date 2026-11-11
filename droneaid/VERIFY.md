@@ -10,13 +10,13 @@ Tick each line; anything unexpected goes into the Phase 7 notes.
 ## Sign-in and access (S1, S2a, S2b)
 
 - [ ] **Login page**: open http://localhost:3000/login in a private window → email and password form only, no "Continue with Google" (Google is not configured locally).
-- [ ] **Password sign-in**: sign in as filipp → Home lists recent pages; sidebar space menu shows DroneAid France, DroneAid Academy, DroneAid R&D and General.
+- [ ] **Password sign-in**: sign in as filipp → Home lists recent pages; sidebar space menu shows DroneAid France, DroneAid Academy and DroneAid R&D (no General, no Demo Workspace since S12).
 - [ ] **Password reset mail**: log out → *Forgot your password?* → any imported email (e.g. `emmanuel@droneaid.fr`) → the mail appears in mailpit; its link sets a password; that user then sees only their own spaces (DroneAid France).
 - [ ] **Signup rules**: Settings → *Signup rules* → 4 rules (`droneaid.fr`, `gey.olivier@gmail.com`, `yildirim.serhat62@gmail.com` → DroneAid France writer; `anton.chaika@drone-aid.pt` → DroneAid R&D admin), Google signup switch on. Edit a pattern → the preview line updates; Save works; reload keeps it.
 - [ ] **Space roles**: Space settings → Members of each space → AFFiNE owners/admins are admins, members writers; "Everyone" is not a member of any migrated space.
-- [ ] *Judge*: **Demo Workspace** is visible only to `mark.p@drone-aid.nl` (its only AFFiNE member). Docmost hides private spaces even from the workspace owner. Decide whether filipp (or others) should be added.
-- [ ] *Judge*: **General** (Docmost's default space, empty) gives "Everyone" write access. Keep it, restrict it to reader, or delete it?
-- [ ] *Judge*: **Batteries** (DroneAid Academy, `/s/droneaid-academy/p/x-Lbi9a9pcrA`) had members at editor instead of manager in AFFiNE; here they get their space role. Acceptable?
+- [x] *Resolved (S12)*: **Demo Workspace** is not migrated (local-only AFFiNE workspace, one member `mark.p@drone-aid.nl`). The importer leaves it out by default (`--exclude-workspaces`, default `Demo Workspace`): no space, pages, files or import-map rows; its old URLs fall through to `/home`. `import-report.md` → *Workspaces not migrated* lists what was dropped (8 docs, 1 folder, 1 database, 19 files / 783,408 B, 42 old URLs). `mark.p` still gets a Docmost account, with no space.
+- [x] *Resolved (S12)*: **General** (Docmost's default space) is deleted by the importer right after setup; `workspaces.default_space_id` is null. Core only writes that column (signup, invitations and our Google signup never read it), so new users land on Home with the spaces their signup rule or invitation groups give them. `verify.md` checks it (`default "General" space` 0).
+- [x] *Resolved (S12)*: **Batteries** (DroneAid Academy) had members at editor instead of manager in AFFiNE; here they get their space role. Confirmed acceptable, no change.
 - [ ] Not testable locally: Google sign-in (mock-OIDC e2e 15/15 passed in S7; needs the redirect URI on the real client), and the missing "invite accepted" mail on the Google-invite path (S2b open issue).
 - [ ] Known: no MFA in this build (EE); password login never asks for a second factor.
 

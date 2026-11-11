@@ -61,6 +61,8 @@ export type ImportReport = {
   unreferencedBlobs: { workspace: string; key: string; mime: string; size: number; avatar: boolean }[];
   canvasOnlyBlobs: { workspace: string; key: string; docs: string[] }[];
   urlMap: { mapped: UrlMapEntry[]; unmapped: UnmappedUrl[] } | null;
+  excludedWorkspaces: Bundle['excluded'];
+  defaultSpaceRemoved: { id: string; name: string; slug: string } | null;
   warnings: string[];
   timingsMs: { total: number; pages: Record<string, number> };
 };
@@ -135,6 +137,8 @@ export function newReport(
     unreferencedBlobs,
     canvasOnlyBlobs,
     urlMap: null,
+    excludedWorkspaces: bundle.excluded,
+    defaultSpaceRemoved: null,
     warnings: [],
     timingsMs: { total: 0, pages: {} },
   };
@@ -164,6 +168,16 @@ export function reportMarkdown(r: ImportReport): string {
     table(['Object', 'Created', 'Already there'], [
       ...new Set([...Object.keys(r.created), ...Object.keys(r.skippedExisting)]),
     ].sort().map((k) => [k, r.created[k] ?? 0, r.skippedExisting[k] ?? 0])),
+    '## Workspaces not migrated',
+    table(
+      ['AFFiNE workspace', 'Members', 'Docs (live / trashed)', 'Folders', 'Databases', 'Files (blobs, bytes)', 'Published', 'Doc grants', 'Old URLs -> /home'],
+      r.excludedWorkspaces.map((w) => [
+        `${w.name} (${w.id})`, w.members.join(', '), `${w.docs} / ${w.trashedDocs}`, w.folders, w.databases,
+        `${w.blobs}, ${w.blobBytes} B`, w.publishedDocs, w.docGrants, w.oldUrls,
+      ]),
+    ),
+    `Default space of setup: ${r.defaultSpaceRemoved ? `"${r.defaultSpaceRemoved.name}" removed, workspaces.default_space_id = null` : 'not removed (see warnings) or already gone'}.`,
+    '',
     '## Spaces',
     table(['AFFiNE workspace', 'Space slug', 'Members'], r.spaces.map((s) => [s.name, s.slug, s.members.join(', ')])),
     '## Agent',
