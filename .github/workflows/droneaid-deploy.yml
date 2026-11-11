@@ -80,8 +80,12 @@ jobs:
           # been deployed: its source must stay reachable while it runs, and after.
           build-args: |
             SOURCE_COMMIT=${{ github.sha }}
+          # mode=min: cache only the final image's layers. mode=max also exported the
+          # builder stage (full dev node_modules), 99 s of a 3 m 5 s build in run
+          # 42872284160, for no hit: `COPY . .` precedes `pnpm install`, so every commit
+          # rebuilds the builder and installer stages anyway.
           cache-from: type=gha,scope=docmost-arm64
-          cache-to: type=gha,scope=docmost-arm64,mode=max
+          cache-to: type=gha,scope=docmost-arm64,mode=min
 
       - name: Summary
         env:
