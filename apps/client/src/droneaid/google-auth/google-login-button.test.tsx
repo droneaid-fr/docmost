@@ -36,13 +36,13 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
-function renderAt(path: string) {
+function renderAt(path: string, props: { migrationHint?: boolean } = {}) {
   const client = new QueryClient();
   return render(
     <MantineProvider>
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[path]}>
-          <GoogleLoginButton />
+          <GoogleLoginButton {...props} />
         </MemoryRouter>
       </QueryClientProvider>
     </MantineProvider>,
@@ -70,6 +70,17 @@ describe("GoogleLoginButton", () => {
     renderAt("/login?google_error=domain_not_allowed");
     const alert = await screen.findByTestId("google-auth-error");
     expect(alert.textContent).toBe("googleAuth.error.domain_not_allowed");
+  });
+
+  it("shows the migration hint only when asked", async () => {
+    vi.mocked(getGoogleAuthConfig).mockResolvedValue({ enabled: true });
+    renderAt("/login");
+    await screen.findByTestId("google-login-button");
+    expect(screen.queryByTestId("google-migration-hint")).toBeNull();
+    cleanup();
+    renderAt("/login", { migrationHint: true });
+    const hint = await screen.findByTestId("google-migration-hint");
+    expect(hint.textContent).toBe("googleAuth.migrationHint");
   });
 
   it("maps an unknown error code to the generic message", async () => {

@@ -79,7 +79,7 @@ export function LoginForm() {
           </Title>
 
           <SsoLogin />
-          <GoogleLoginButton withDivider={!data?.enforceSso} />
+          <GoogleLoginButton withDivider={!data?.enforceSso} migrationHint />
 
           {!data?.enforceSso && (
             <>

@@ -2,6 +2,7 @@
   "googleAuth": {
     "continue": "Continue with Google",
     "or": "or",
+    "migrationHint": "Used the old base (AFFiNE)? Sign in with Google: old passwords were not carried over.",
     "error": {
       "email_not_verified": "Your Google account's email address is not verified.",
       "missing_email": "Google did not share an email address for this account.",

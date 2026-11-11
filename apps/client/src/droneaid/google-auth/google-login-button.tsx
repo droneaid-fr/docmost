@@ -1,4 +1,4 @@
-import { Alert, Button, Divider } from "@mantine/core";
+import { Alert, Button, Divider, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -25,9 +25,14 @@ const KNOWN_ERRORS = [
 interface Props {
   /** Show the "or" divider below the button (when a password form follows). */
   withDivider?: boolean;
+  /** Tell users migrated from AFFiNE that only Google sign-in works for them. */
+  migrationHint?: boolean;
 }
 
-export function GoogleLoginButton({ withDivider = true }: Props) {
+export function GoogleLoginButton({
+  withDivider = true,
+  migrationHint = false,
+}: Props) {
   const { t } = useTranslation("droneaid");
   const [searchParams] = useSearchParams();
   const { data } = useQuery({
@@ -63,6 +68,11 @@ export function GoogleLoginButton({ withDivider = true }: Props) {
       >
         {t("googleAuth.continue")}
       </Button>
+      {migrationHint && (
+        <Text size="xs" c="dimmed" ta="center" mt="xs" data-testid="google-migration-hint">
+          {t("googleAuth.migrationHint")}
+        </Text>
+      )}
       {withDivider && (
         <Divider my="md" label={t("googleAuth.or")} labelPosition="center" />
       )}

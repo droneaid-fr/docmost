@@ -2,6 +2,7 @@
   "googleAuth": {
     "continue": "Continuer avec Google",
     "or": "ou",
+    "migrationHint": "Vous utilisiez l'ancienne base (AFFiNE) ? Connectez-vous avec Google : les anciens mots de passe n'ont pas été repris.",
     "error": {
       "email_not_verified": "L'adresse e-mail de votre compte Google n'est pas vérifiée.",
       "missing_email": "Google n'a pas communiqué d'adresse e-mail pour ce compte.",
