@@ -75,8 +75,10 @@ touching the front door, and postgres/redis never sit on a network Caddy sees.
    docker run --rm -v /opt/caddy/conf:/etc/caddy:ro caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
    # In /opt/affine/compose.yml delete the `caddy` service (keep the top-level
    # caddy_data/caddy_config volumes: /opt/caddy reuses them as external volumes, so the
-   # certificates and ACME account carry over). Then, back to back:
-   cd /opt/affine && docker compose up -d --remove-orphans   # removes affine_caddy
+   # certificates and ACME account carry over). Back up compose.yml first. Then, back
+   # to back. Do NOT use `docker compose up -d --remove-orphans` here: it would start
+   # the frozen `affine` server again.
+   docker rm -f affine_caddy
    cd /opt/caddy  && docker compose up -d
    cd /opt/affine && docker compose stop                      # AFFiNE stopped, restorable
    ```

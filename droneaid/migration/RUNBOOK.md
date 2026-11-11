@@ -33,6 +33,11 @@ container of `droneaid/local/compose.yml`: import 5 s, `--verify` PASS.
    `base/backups/affine-<ts>/` (Phase 0 procedure, `affine/affine-oci`).
 3. Restore it into the local restored stack
    (`affine/affine-selfhost/restore-*`, Phase 0) and check its `MANIFEST`.
+4. If `updates` holds rows (AFFiNE flushes pending edits as it stops), the
+   exporter refuses. Merge them into `snapshots` in the local restore only
+   (yjs `applyUpdate` on the snapshot, `encodeStateAsUpdate`, delete the rows),
+   then export from a copy of the backup whose `MANIFEST` says `updates 0`, with
+   a note saying why. Done on 2026-11-11: `backups/affine-20261111T170033Z-merged/MERGED.md`.
 
 ## 2. Export
 
@@ -59,12 +64,16 @@ with the bundle mounted or copied in, e.g. `docker cp`:
 ```bash
 cd /opt/docmost
 docker compose cp migration/bundle docmost:/tmp/bundle
+docker compose exec -u root docmost chown -R node:node /tmp/bundle   # else EACCES
 docker compose exec -w /app/apps/server docmost \
   node dist/droneaid/migration/import-cli.js \
     --bundle /tmp/bundle --out /tmp/import --verify
 docker compose cp docmost:/tmp/import migration/import-<ts2>
-docker compose exec docmost rm -rf /tmp/bundle /tmp/import
+docker compose exec -u root docmost rm -rf /tmp/bundle /tmp/import
 ```
+
+When piping these commands through `ssh host 'bash -s' <<EOF`, give every
+`docker compose exec` `</dev/null`: otherwise it swallows the rest of the script.
 
 - Exit 0 and **Result: PASS** in `verify.md`: continue.
 - Exit 2 (a check failed) or 1 (an error): read the error / `verify.md`. The
