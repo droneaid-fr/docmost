@@ -123,6 +123,9 @@ Its final backup (`affine-20261111T170033Z`) is kept off the VM, in `base/backup
   nothing changed) → `up -d` (bounded, 600 s) → wait for the container healthcheck
   (`/api/health`, 300 s) → the workflow then checks `${DEPLOY_URL}/api/health` publicly
   (5 min). Any failure triggers `rollback`.
+- Source offer (AGPL §13): before rolling out, the deploy job refuses a commit that is not
+  on `production` or `droneaid` of the public repo; after the public health check it tags
+  the commit `deploy/<YYYYMMDD>-<sha7>`. Never delete those tags.
 
 ## Rollback and migrations
 

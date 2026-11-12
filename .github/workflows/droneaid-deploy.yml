@@ -19,6 +19,10 @@ name: DroneAid deploy
 # The rollout writes only /opt/docmost/.env (DOCMOST_IMAGE=...), keeps .env.previous and
 # rolls back on failure. Rollback is image-only and is refused once the new image has run
 # a migration (the previous image would not boot); see droneaid/deploy/rollout.sh.
+#
+# AGPL §13 (droneaid/docs/licence-review.md, finding 2): the deploy job refuses a commit
+# that is not on `droneaid` or `production` of this public repo, and tags every commit it
+# deployed as deploy/<YYYYMMDD>-<sha7>, so its source stays reachable after a rewrite.
 
 on:
   push:
@@ -107,7 +111,7 @@ jobs:
       group: droneaid-deploy-production
       cancel-in-progress: false
     permissions:
-      contents: read
+      contents: write   # the deploy/<date>-<sha7> tag; nothing else is written
       packages: read
     env:
       IMAGE: ${{ needs.build.outputs.image }}
@@ -117,6 +121,23 @@ jobs:
         with:
           persist-credentials: false
           sparse-checkout: droneaid/deploy
+
+      - name: Refuse a commit that is not on a public branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          private="$(gh api "repos/${GITHUB_REPOSITORY}" --jq .private)"
+          [ "$private" = "false" ] || { echo "::error::${GITHUB_REPOSITORY} is not public: no AGPL source offer"; exit 1; }
+          for branch in production droneaid; do
+            # base...head with base = our commit: "identical" or "ahead" means the branch contains it.
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${GITHUB_SHA}...${branch}" --jq .status 2>/dev/null || true)"
+            case "$status" in
+              identical|ahead) echo "${GITHUB_SHA} is on ${branch}"; exit 0 ;;
+            esac
+          done
+          echo "::error::${GITHUB_SHA} is on neither production nor droneaid; merge it there before deploying."
+          exit 1
 
       - name: Configure SSH
         env:
@@ -168,6 +189,22 @@ jobs:
           done
           echo "::error::${url} did not report status ok within 5 minutes."
           exit 1
+
+      - name: Tag the deployed commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="deploy/$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          if out="$(gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${GITHUB_SHA}" 2>&1)"; then
+            echo "Tagged ${tag}"
+          elif printf '%s' "$out" | grep -q 'Reference already exists'; then
+            echo "${tag} already exists"
+          else
+            # The rollout itself succeeded; a missing tag is fixed by hand, not by a rollback.
+            echo "::warning::could not create tag ${tag}: ${out}"
+          fi
+          echo "Tag \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Roll back after a failed public check
         if: failure() && steps.verify.outcome == 'failure'

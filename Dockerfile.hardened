@@ -9,7 +9,10 @@ WORKDIR /app
 COPY . .
 
 RUN pnpm install --frozen-lockfile
-RUN NX_DAEMON=false pnpm build
+# DroneAid: commit baked into the client for the AGPL source link (vite.config.ts).
+# Declared after install so a new commit only invalidates the build layer.
+ARG SOURCE_COMMIT=""
+RUN NX_DAEMON=false SOURCE_COMMIT="$SOURCE_COMMIT" pnpm build
 
 FROM base AS installer
 
@@ -40,9 +43,15 @@ RUN mkdir -p /app/data/storage
 
 # runtime image has no shell or package manager, so everything above happens in the dev variant
 FROM dhi.io/node:26-debian13
-LABEL org.opencontainers.image.source="https://github.com/docmost/docmost"
+# DroneAid: same labels as Dockerfile (see NOTICE.md). We build from Dockerfile; this
+# variant is kept in step so a hardened build is not mislabelled as upstream's source.
+ARG SOURCE_COMMIT=""
+LABEL org.opencontainers.image.source="https://github.com/droneaid-fr/docmost" \
+  org.opencontainers.image.revision="$SOURCE_COMMIT" \
+  org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 COPY --from=installer --chown=1000:1000 /app /app
+COPY --chown=1000:1000 LICENSE NOTICE.md /app/
 
 WORKDIR /app/apps/server
 
