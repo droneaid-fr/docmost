@@ -1,7 +1,8 @@
 # Production deploy runbook (Oracle VM)
 
-Docmost replaces AFFiNE on the same Oracle VM (Ubuntu 24.04 arm64, 2 OCPU / 12 GB,
-`130.61.175.219`). **No side-by-side staging:** AFFiNE is frozen and stopped first, then
+Docmost replaced AFFiNE on the same Oracle VM (Ubuntu 24.04 arm64, 2 OCPU / 12 GB,
+`130.61.175.219`) on 2026-11-11; **AFFiNE was removed from the VM the same day** (see
+"AFFiNE removal" below). **No side-by-side staging:** AFFiNE is frozen and stopped first, then
 Docmost is set up and takes over `base.droneaid.fr` in one downtime window. The data move
 itself is [`../migration/RUNBOOK.md`](../migration/RUNBOOK.md); this file covers the stack,
 Caddy, the pipeline, rollback and backups. Short checklist: `base/.notes/docmost-deploy-next-steps.md`.
@@ -30,7 +31,7 @@ Caddy, the pipeline, rollback and backups. Short checklist: `base/.notes/docmost
   data/postgres/                  postgres 18 (PGDATA in 18/docker)
   data/redis/                     appendonly file
   backup.sh, backups/             root, 700
-/opt/caddy/                       from the cutover on (before: Caddy is in /opt/affine)
+/opt/caddy/                       standalone Caddy; volumes caddy_data, caddy_config (external)
 ```
 
 ```
@@ -48,12 +49,12 @@ cutover in its own `/opt/caddy` project). AFFiNE can then be stopped and removed
 touching the front door, and postgres/redis never sit on a network Caddy sees.
 
 **Memory.** Limits: docmost 2 GB, postgres 1 GB, redis 512 MB (the local stack idles at
-~40 MB for postgres and ~10 MB for redis). AFFiNE is stopped, so the VM has ample room.
+~40 MB for postgres and ~10 MB for redis). AFFiNE is gone, so the VM has ample room.
 
 ## Before the downtime (outside the VM)
 
 1. Google OAuth client: add `https://base.droneaid.fr/api/droneaid/auth/google/callback`
-   (test with a junk control URI, `affine-oci/state.md` "Domain flip").
+   (test with a junk control URI, `affine-oci/affine/state.md` "Domain flip").
 2. GitHub, repo `droneaid-fr/docmost`: environment `production` (restrict deployment
    branches to `production`), its secrets `ORACLE_HOST`, `ORACLE_USER`,
    `ORACLE_SSH_KEY`, `ORACLE_SSH_KNOWN_HOSTS` (same values as the AFFiNE fork), and the
@@ -68,6 +69,7 @@ touching the front door, and postgres/redis never sit on a network Caddy sees.
 2. **Move Caddy out of the AFFiNE project**, so stopping AFFiNE keeps the front door up:
    ```bash
    docker network create edge
+   docker volume create caddy_data && docker volume create caddy_config  # fresh VM only*
    sudo mkdir -p /opt/caddy/conf && sudo chown -R ubuntu:ubuntu /opt/caddy
    # /opt/caddy/compose.yml          <- droneaid/deploy/caddy/compose.yml
    # /opt/caddy/conf/Caddyfile       <- PART 2 of Caddyfile.snippet
@@ -84,6 +86,8 @@ touching the front door, and postgres/redis never sit on a network Caddy sees.
    ```
    Also disable the AFFiNE fork's deploy workflow, so a push there cannot restart AFFiNE.
    Until Docmost is up, `base.droneaid.fr` answers 502.
+   \*At the 2026-11-11 cutover `/opt/caddy` first reused AFFiNE's `affine_caddy_*`
+   volumes; they were copied to `caddy_data` / `caddy_config` when AFFiNE was removed.
 3. **Set up `/opt/docmost`:**
    ```bash
    sudo mkdir -p /opt/docmost/data/{storage,postgres,redis}
@@ -104,12 +108,8 @@ touching the front door, and postgres/redis never sit on a network Caddy sees.
    `45 2 * * * /opt/docmost/backup.sh >> /opt/docmost/backups/backup.log 2>&1`,
    then run it once by hand.
 
-**Back to AFFiNE** (before Docmost has taken real edits): `cd /opt/docmost && docker compose
-stop`; `cd /opt/affine && docker compose start`; `docker network connect --alias affine edge
-affine_server`; set the `base.droneaid.fr` block in `/opt/caddy/conf/Caddyfile` to
-`reverse_proxy affine:3010 { header_up X-Forwarded-Proto https }` (drop `import
-droneaid_redirects`); `docker exec caddy caddy reload --config /etc/caddy/Caddyfile`.
-Edits made in Docmost meanwhile are lost.
+**Back to AFFiNE** is no longer possible on the VM: AFFiNE was removed on 2026-11-11.
+Its final backup (`affine-20261111T170033Z`) is kept off the VM, in `base/backups/`.
 
 ## Deploying
 
@@ -185,5 +185,20 @@ docker compose up -d
 
 Then compare a few MANIFEST counts (`select count(*) from pages`, ...).
 
-Phase 9: when AFFiNE is removed, never `docker compose down -v` in `/opt/affine` (it would
-delete the Caddy volumes); migrate them to volumes owned by `/opt/caddy` first.
+## AFFiNE removal (done 2026-11-11)
+
+1. Checked that the VM's final AFFiNE backup `/opt/affine/backups/20261111T170033Z` was
+   byte-identical (sha256) to the local copy `base/backups/affine-20261111T170033Z`, and
+   saved `/opt/affine` without data and backups to `base/backups/affine-vm-opt-config-20261111.tar.gz`.
+2. Moved Caddy off AFFiNE's volumes: `docker volume create caddy_data caddy_config`,
+   stopped Caddy, `cp -a` each old volume into the new one with a throwaway `alpine`
+   container (10 and 1 files), pointed `/opt/caddy/compose.yml` at the new names
+   (old file kept as `compose.yml.bak-pre-volmove-20261111`), `up -d --force-recreate`.
+   Both certificates kept their serials; Caddy made no ACME request.
+3. `docker compose down` in `/opt/affine`; removed its containers (also the old
+   `affine_migration_job`), the `affine_default` network, the `affine_caddy_*` volumes,
+   every AFFiNE, pgvector, manticore and `redis:latest` image, root's 02:30 AFFiNE
+   backup cron line, then `/opt/affine` itself (data and the VM's AFFiNE backups).
+   Disk use went from 53 % to 14 %.
+4. Checked: `/api/health` 200, `base.drone-aid.fr` 301, old AFFiNE links redirect, MCP
+   answers 401 without a token, `caddy validate` OK.

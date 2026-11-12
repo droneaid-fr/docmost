@@ -1,7 +1,5 @@
-# Standalone Caddy for /opt/caddy, used from the cutover on (README "Cutover").
-# Until then Caddy lives in /opt/affine/compose.yml (container affine_caddy); this file
-# takes it out of the AFFiNE project so AFFiNE can be stopped without taking the
-# front door down.
+# Standalone Caddy for /opt/caddy, the front door of the VM since the cutover
+# (README "Cutover"). It belongs to no app project, so apps can come and go behind it.
 #
 #   /opt/caddy/compose.yml        this file
 #   /opt/caddy/conf/Caddyfile     PART 2 of droneaid/deploy/Caddyfile.snippet
@@ -34,11 +32,12 @@ networks:
     external: true
 
 volumes:
-  # AFFiNE's Caddy volumes, reused so the certificates and the ACME account carry over.
-  # Never `docker compose down -v` in /opt/affine while these are in use.
+  # Created by hand (docker volume create caddy_data caddy_config), so no `down -v`
+  # in any project can delete the certificates and the ACME account. On 2026-11-11 they
+  # were copied here from AFFiNE's affine_caddy_data / affine_caddy_config.
   caddy_data:
     external: true
-    name: affine_caddy_data
+    name: caddy_data
   caddy_config:
     external: true
-    name: affine_caddy_config
+    name: caddy_config

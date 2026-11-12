@@ -139,7 +139,8 @@ fall back to `/home`, as do Demo Workspace's old URLs.
 - Every user signs in with Google and sees their spaces.
 - The agent completes a PDF import and a database edit (Phase 8 check).
 - Old links redirect (step 4 spot check).
-- Keep the AFFiNE stack stopped but restorable (Phase 9).
+- Keep the AFFiNE stack stopped but restorable (Phase 9). On the DroneAid VM it was
+  removed on 2026-11-11 (`droneaid/deploy/README.md`, "AFFiNE removal").
 
 ## Rollback
 
@@ -147,3 +148,4 @@ Until Caddy is switched (step 4), nothing user-facing changed: restart the
 AFFiNE container and drop the Docmost database. After the switch, revert the
 Caddyfile to the AFFiNE upstream and restart AFFiNE; edits made in Docmost in
 between are lost unless copied by hand.
+Once AFFiNE is removed from the VM there is no rollback; only its final backup remains.

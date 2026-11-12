@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly backup of the Docmost stack at /opt/docmost. Port of affine-oci/deploy/backup.sh.
+# Nightly backup of the Docmost stack at /opt/docmost. Port of affine-oci/affine/deploy/backup.sh.
 #
 # Installed on the VM as /opt/docmost/backup.sh, run from root's crontab:
 #   45 2 * * * /opt/docmost/backup.sh >> /opt/docmost/backups/backup.log 2>&1
