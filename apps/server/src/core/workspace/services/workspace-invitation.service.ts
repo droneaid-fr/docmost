@@ -50,6 +50,7 @@ import { INVITATION_EXPIRY_DAYS } from '../workspace.constants';
 import { addDays } from 'date-fns';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { APP_NAME } from '../../../droneaid/branding/brand'; // DroneAid
 
 @Injectable()
 export class WorkspaceInvitationService {
@@ -359,7 +360,7 @@ export class WorkspaceInvitationService {
 
       await this.mailService.sendToQueue({
         to: invitedByUser.email,
-        subject: `${newUser.name} has accepted your Docmost invite`,
+        subject: `${newUser.name} has accepted your ${APP_NAME} invite`,
         template: emailTemplate,
       });
     }
@@ -559,7 +560,7 @@ export class WorkspaceInvitationService {
 
     await this.mailService.sendToQueue({
       to: inviteeEmail,
-      subject: `${invitedByName} invited you to Docmost`,
+      subject: `${invitedByName} invited you to ${APP_NAME}`,
       template: emailTemplate,
     });
   }

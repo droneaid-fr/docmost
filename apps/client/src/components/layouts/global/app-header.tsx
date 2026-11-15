@@ -1,9 +1,7 @@
 import {
   ActionIcon,
   Badge,
-  Box,
   Group,
-  Text,
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
@@ -24,6 +22,8 @@ import SidebarToggle from "@/components/ui/sidebar-toggle-button.tsx";
 import { useTranslation } from "react-i18next";
 import useTrial from "@/ee/hooks/use-trial.tsx";
 import { isCloud } from "@/lib/config.ts";
+import { APP_NAME } from "@/droneaid/branding/brand.ts";
+import BrandLogo from "@/droneaid/branding/brand-logo.tsx";
 import {
   SearchControl,
   SearchMobileControl,
@@ -84,23 +84,9 @@ export function AppHeader() {
             />
           </Tooltip>
 
-          <Link to="/home" className={classes.brand} aria-label="Docmost">
-            <Box hiddenFrom="sm" className={classes.brandIcon}>
-              <img
-                src="/icons/favicon-32x32.png"
-                alt="Docmost"
-                width={22}
-                height={22}
-              />
-            </Box>
-            <Text
-              size="lg"
-              fw={600}
-              style={{ userSelect: "none" }}
-              visibleFrom="sm"
-            >
-              Docmost
-            </Text>
+          {/* DroneAid: our logo and product name */}
+          <Link to="/home" className={classes.brand} aria-label={APP_NAME}>
+            <BrandLogo markSize={22} textSize="lg" nameVisibleFrom="sm" />
           </Link>
 
           <Group ml={50} gap={5} className={classes.links} visibleFrom="sm">

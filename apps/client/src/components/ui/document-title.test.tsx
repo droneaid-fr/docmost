@@ -13,7 +13,7 @@ describe("DocumentTitle", () => {
 
   it("appends the app name", () => {
     renderTitle(<DocumentTitle title="Home" />);
-    expect(document.title).toBe("Home - Docmost");
+    expect(document.title).toBe("Home - DroneAid Base");
   });
 
   it("omits the app name when asked", () => {
@@ -23,7 +23,7 @@ describe("DocumentTitle", () => {
 
   it("falls back to the app name without a title", () => {
     renderTitle(<DocumentTitle />);
-    expect(document.title).toBe("Docmost");
+    expect(document.title).toBe("DroneAid Base");
   });
 
   it("never renders an empty title", () => {

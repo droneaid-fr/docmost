@@ -9,6 +9,7 @@ import {
   Text,
 } from '../components';
 import * as React from 'react';
+import { APP_NAME } from '../../../droneaid/branding/brand'; // DroneAid
 
 interface MailBodyProps {
   children: React.ReactNode;
@@ -81,7 +82,8 @@ export function MailFooter() {
     <Section style={footer}>
       <Row>
         <Text style={{ textAlign: 'center', color: '#706a7b' }}>
-          © {new Date().getFullYear()} Docmost, All Rights Reserved <br />
+          {/* DroneAid: our product name; the software keeps its attribution */}
+          {APP_NAME} · Powered by Docmost <br />
         </Text>
       </Row>
     </Section>

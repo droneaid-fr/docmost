@@ -1,28 +1,33 @@
 {
-  "name": "Docmost",
-  "short_name": "Docmost",
+  "name": "DroneAid Base",
+  "short_name": "DroneAid Base",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#222",
   "theme_color": "#222",
   "icons": [
     {
-      "src": "icons/favicon-16x16.png",
+      "src": "droneaid/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "droneaid/favicon-16.png",
       "type": "image/png",
       "sizes": "16x16"
     },
     {
-      "src": "icons/favicon-32x32.png",
+      "src": "droneaid/favicon-32.png",
       "type": "image/png",
       "sizes": "32x32"
     },
     {
-      "src": "icons/app-icon-192x192.png",
+      "src": "droneaid/app-icon-192.png",
       "type": "image/png",
       "sizes": "180x180 192x192"
     },
     {
-      "src": "icons/app-icon-512x512.png",
+      "src": "droneaid/app-icon-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }

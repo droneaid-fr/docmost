@@ -55,3 +55,8 @@ commit the image was built from. The image carries the same commit in its
 
 "Docmost" is the name of the upstream project and may be a trademark of its owners. The AGPL
 grants no trademark rights; we use the name only to identify the software this is based on.
+
+The interface shows this instance as "DroneAid Base" with DroneAid's logo
+(`apps/client/public/droneaid/`). That name and logo belong to DroneAid and identify its
+service; the AGPL grants no rights to them either, so a fork must replace them. The software
+is still credited as Docmost ("Powered by Docmost" and the source-code link).
