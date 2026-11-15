@@ -1,6 +1,6 @@
 {
   "name": "DroneAid Base",
-  "short_name": "DroneAid Base",
+  "short_name": "DroneAid",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#222",

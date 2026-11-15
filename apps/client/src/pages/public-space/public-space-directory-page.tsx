@@ -16,6 +16,7 @@ import { DocumentTitle } from "@/components/ui/document-title.tsx";
 import { MAIN_CONTENT_ID, SkipToMain } from "@/components/ui/skip-to-main.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import styles from "@/features/public-space/components/docs/docs-hub.module.css";
+import SourceCodeLink from "@/droneaid/source/source-code-link.tsx";
 
 const TILE_COLORS = [
   "#1f9d55",
@@ -226,6 +227,9 @@ export default function PublicSpaceDirectoryPage() {
               >
                 Docmost
               </a>
+              {/* DroneAid: AGPL §13 source offer on the public space directory */}
+              {" · "}
+              <SourceCodeLink className={styles.footerBranding} />
             </div>
           </div>
         </footer>
